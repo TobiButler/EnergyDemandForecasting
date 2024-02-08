@@ -6,20 +6,22 @@ import numpy as np
 import pandas as pd
 import base64
 
+
 # Create Dash app
-app = dash.Dash(__name__)
+app = dash.Dash(__name__, suppress_callback_exceptions=True)
 
 ### Define the four pages ### only one page will ever be active at a time
 
 # Define landing page layout
+lp_button_ids = dict(zip(["page1", "page2", "page3"], ["lp_to_p1", "lp_to_p2", "lp_to_p3"]))
 landing_page_layout = html.Div([
     html.H1('Energy Demand Forecasting Application'),
     html.Div([
-        dcc.Link('Page 1', href='/page-1'),
+        html.Button('Page 1', id=lp_button_ids['page1'], n_clicks=0),
         html.Br(),
-        dcc.Link('Page 2', href='/page-2'),
+        html.Button('Page 2', id=lp_button_ids['page2'], n_clicks=0),
         html.Br(),
-        dcc.Link('Page 3', href='/page-3'),
+        html.Button('Page 3', id=lp_button_ids['page3'], n_clicks=0),
     ])
 ])
 
@@ -89,12 +91,75 @@ page3_layout = html.Div([
     ])
 ])
 
+### End Default Page Layout Definitions ###
+
+### Define Callbacks for Navigation ###
+
+# Callback for landing page navigation
+@app.callback(Output('url', 'pathname'), [Input(lp_button_ids["page1"], 'n_clicks'), 
+    Input(lp_button_ids["page2"], 'n_clicks'), Input(lp_button_ids["page3"], 'n_clicks')]
+)
+def landing_page_navigation(lp_to_p1_clicks, lp_to_p2_clicks, lp_to_p3_clicks):
+    ctx = dash.callback_context
+    # if not ctx.triggered:
+    #     return landing_page_layout
+    # else:
+    # button_id = ctx.triggered[0]['prop_id'].split('.')[0]
+    button_id = ctx.triggered_id
+    print(button_id)
+    if button_id == lp_button_ids["page1"]:
+        # return page1_layout
+        return '/page-1'
+    elif button_id == lp_button_ids["page2"]:
+        return '/page-1'
+    elif button_id == lp_button_ids["page3"]:
+        return '/page-3'
+    else:
+        return landing_page_layout
+
+# Callback for page 1 navigation
+
+# callback for page 2 navigation
+
+# callback for page 3 navigation
+
+### Define Callbacks for Page 1 ###
+
+# callback for drop-down menu to select variable -> effects all visuals shown
+
+### Define Callbacks for Page 2 ###
+
+# callback (model selection) -> page 2 layout
+
+# when VARMA-GARCH model is selected:
+
+# callback (variable selection) -> time series plot of training data
+
+# callback (hyperparamter selection) -> time series plot with evaluation results from this model
+
+# callback (variable selection) -> time series plot showing evaluation impact of randomizing variable
+
+# when BAYESIAN ES-LSTM model is selected:
+
+# callback (variable selection) -> time series plot of training data
+
+# callback (hyperparamter selection) -> time series plot with evaluation results from this model
+
+# callback (variable selection) -> time series plot showing evaluation impact of randomizing variable
+
+### Define Callbacks for Page 3 Visuals ###
+
+# callback (slider) -> time series plot showing forecasts, slider values
+
+
+
+
 # Define initial starting layout for the app
-app.layout = landing_page_layout
-# app.layout = html.Div([
-#     dcc.Location(id='url', refresh=False),
-#     html.Div(id='page-content')
-# ])
+# app.layout = landing_page_layout
+app.layout = html.Div([
+    dcc.Location(id='url', refresh=False),
+    html.Div(id='page-content')
+])
 
 # Define callbacks to update content dynamically
 @app.callback(
@@ -115,6 +180,7 @@ def update_time_series_plot(value):
 def update_slider_output(value):
     return f'Future days: {value}'
 
+
 # Define callback to display page content based on URL
 @app.callback(
     Output('page-content', 'children'),
@@ -134,6 +200,4 @@ def display_page(pathname):
 
 if __name__ == '__main__':
     app.run_server(debug=True, host='0.0.0.0')
-
-
 
