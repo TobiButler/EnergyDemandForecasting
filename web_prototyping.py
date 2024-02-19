@@ -33,15 +33,32 @@ landing_page_layout = html.Div([
 
 # HERE want to add dropdown for each type of plot. Only offer the relevant variables for each type of plot (ex: only show outliers plotted for variables that have outliers.)
 
-directory = r"Plotly Figures/Raw Time Series" # Specify the directory path
-# filenames = os.listdir(directory) # Get a list of all file names in the directory
-variables = [x[:-4] for x in os.listdir(directory)] # Get a list of associated variables
-dropdown_options = [{"label":variable, "value":variable} for variable in variables]
-# dropdown_options = [{"label":variable, "value":filename} for variable,filename in zip(variables,filenames)]
-# for variable in preliminary_data.columns:
-#     file_variable = variable.replace(r"/", "-")
-#     dropdown_options.append({"label":variable, "value":"{}/{}.pkl".format(path_to_plots, file_variable)})
-# encoded_image = base64.b64encode(open("Static Visuals/ed_outliers.png", 'rb').read())
+# Specify the directory path for raw-time-series plots
+rts_directory = r"Plotly Figures/Raw Time Series" 
+variables = [x[:-4] for x in os.listdir(rts_directory)] # Get a list of associated variables
+rts_dropdown_options = [{"label":variable, "value":variable} for variable in variables]
+
+# specify the directory path for outlier identification plots
+outlier_directory = r"Plotly Figures/Outlier Detection"
+variables = [x[:-4] for x in os.listdir(outlier_directory)] # Get a list of associated variables
+outlier_dropdown_options = [{"label":variable, "value":variable} for variable in variables]
+
+# specify the directory path for distribution plots
+distribution_directory = r"Static Visuals/Distributions"
+variables = [x[:-4] for x in os.listdir(distribution_directory)] # Get a list of associated variables
+distribution_dropdown_options = [{"label":variable, "value":variable} for variable in variables]
+
+# specify the directory path for scatterplots
+scatterplot_directory = r"Static Visuals/Scatterplots"
+variables = [x[:-4] for x in os.listdir(scatterplot_directory)] # Get a list of associated variables
+scatterplot_dropdown_options = [{"label":variable, "value":variable} for variable in variables]
+
+# specify the directory path for scatterplots
+decomposition_directory = r"Static Visuals/Decompositions"
+variables = [x[:-4] for x in os.listdir(decomposition_directory)] # Get a list of associated variables
+decomposition_dropdown_options = [{"label":variable, "value":variable} for variable in variables]
+
+
 # Define page 1 default layout
 page1_layout = html.Div([
     html.H1('Part 1: Exploring the Data'),
@@ -50,18 +67,36 @@ page1_layout = html.Div([
         html.Div("Data was collected from EIA, NOAA, BLS"),
         html.Div([
             dcc.Dropdown(
-                id='page1-dropdown',
-                options=dropdown_options,
+                id='rts-dropdown',
+                options=rts_dropdown_options,
                 value="Energy Demand (MWH)"  # Default value
             ),
             html.Div("Raw Time Series Plot"),
             html.Div([], id='raw-time-series'),
             html.Br(),
+            dcc.Dropdown(
+                id='outliers-dropdown',
+                options=outlier_dropdown_options,
+                value="Energy Demand (MWH)"  # Default value
+            ),
             html.Div("Time Series Plot with Outliers Identified"),
             html.Div([], id='outliers'),
             html.Br(),
+            dcc.Dropdown(
+                id='scatterplots-dropdown',
+                options=scatterplot_dropdown_options,
+                value="Energy Demand (MWH)"  # Default value
+            ),
             html.Img(id='distribution'),
             html.Img(id='scatterplot'),
+
+            html.Br(),
+            html.Div("Below are the time series decomposition plots for available time series variables."),
+            dcc.Dropdown(
+                id='decompositions-dropdown',
+                options=decomposition_dropdown_options,
+                value="Energy Demand (MWH)"  # Default value
+            ),
             html.Img(id='decomposition'),
         ])
         
@@ -138,7 +173,7 @@ def page_navigation(*buttons):
         return ""
 
 ### Define Callbacks for Page 1 ###
-
+# need to break this up into five callbacks
 @app.callback(
     [Output('raw-time-series', 'children'), Output('outliers', 'children'), 
         Output('distribution', 'src'), Output('scatterplot', 'src'), 
