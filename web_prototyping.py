@@ -31,6 +31,7 @@ landing_page_layout = html.Div([
     ])
 ])
 
+# HERE want to add dropdown for each type of plot. Only offer the relevant variables for each type of plot (ex: only show outliers plotted for variables that have outliers.)
 
 directory = r"Plotly Figures/Raw Time Series" # Specify the directory path
 # filenames = os.listdir(directory) # Get a list of all file names in the directory

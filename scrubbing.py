@@ -7,22 +7,29 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 import numpy as np
-import statsmodels.api as sm
 from prophet import Prophet
 from prophet.diagnostics import cross_validation, performance_metrics
 from scipy.stats import norm
-import itertools
 import plotly.graph_objects as go
 import pickle as pkl
+import sys
+import os
 
 
 # run all data cleaning functions
-def main(preliminary_dataset:pd.DataFrame=None, path_to_prelim_dataset:str=None, produce_plots:bool=True, reduced_variables:bool=False):
+def main(preliminary_dataset:pd.DataFrame=None, path_to_prelim_dataset:str=None, produce_plots:bool=True, 
+    reduced_variables:bool=False):
+    # get path to preliminary dataset if not provided
     if preliminary_dataset is None:
         if path_to_prelim_dataset is None:
             preliminary_dataset = pd.read_csv(r"Datasets/preliminary.csv")
         else:
             preliminary_dataset = pd.read_csv(path_to_prelim_dataset)
+
+    if reduced_variables:
+        preliminary_dataset = preliminary_dataset[["Energy Demand (MWH)", "HourlyDryBulbTemperature", 
+            "HourlyPrecipitation", "HourlyWindSpeed", "Energy Price (Cents/KWH)", "Civilian Noninstitutional Population", 
+            "CPI-U"]]
     
     # split dataset into training and holdout evaluation sets
     training_data = split_preliminary_dataset(prelim_dataset=preliminary_dataset)
@@ -47,8 +54,9 @@ def main(preliminary_dataset:pd.DataFrame=None, path_to_prelim_dataset:str=None,
         # produce scatterplots with dependent variable
         scatterplots(clean_training_data=clean_training_data)
 
-        # produce time series decomposition plots
-        time_series_decompositions(clean_training_data=clean_training_data)
+    # produce time series decomposition plots
+    time_series_decompositions(clean_training_data=clean_training_data, save_residuals=True,
+        produce_plots=produce_plots)
 
 
 
@@ -157,9 +165,8 @@ def transform_variables(prelim_training_data:pd.DataFrame=None, **kwargs):
 
 # function to fill missing values using univariate Prophet forecasting models
 def impute_missing_values(outliers_removed_data:pd.DataFrame=None, path_to_clean_dataset:str=None, 
-    path_to_prophet_models:str=None, **kwargs):
+    path_to_prophet_models:str=None, use_existing_prophet_models:bool=False, **kwargs):
     if outliers_removed_data is None: outliers_removed_data = identify_outliers(**kwargs)
-    prophet_models = {}
     interpolations = {}
     clean_data = outliers_removed_data.copy()
 
@@ -170,22 +177,33 @@ def impute_missing_values(outliers_removed_data:pd.DataFrame=None, path_to_clean
     if path_to_prophet_models is None: path_to_prophet_models = r"Models/Prophet"
 
     # fit a Prophet model for each time-series variable
-    for variable in outliers_removed_data.select_dtypes("number").columns:
+    time_series_variables = list(outliers_removed_data.select_dtypes("number").columns)
+    for variable in time_series_variables:
         print(f"Interpolating for variable {variable}")
+        df = outliers_removed_data[[variable]].reset_index().rename(columns={"index":"ds", variable:"y"})
+
+        # define prophet model with all seasonality components and high regularization
         model = Prophet(weekly_seasonality=True, yearly_seasonality=True, daily_seasonality=True, 
             changepoint_prior_scale=0.001, seasonality_prior_scale=0.01)
-        df = outliers_removed_data[[variable]].reset_index().rename(columns={"index":"ds", variable:"y"})
+        
+        # fit model
         model.fit(df)
-        prophet_models[variable] = model
+
+        # calculate interpolations
         interpolated_values = model.predict(df)
         interpolations[variable] = interpolated_values
         to_impute = outliers_removed_data[variable].isna().values
         clean_data.loc[to_impute, variable] = interpolated_values["yhat"][to_impute].values
 
-        # save model
+        # save fit model
         variable = variable.replace(r"/", "-")
         with open("{}/{}.pkl".format(path_to_prophet_models, variable), "wb") as file:
             pkl.dump(model, file=file)
+    
+    for variable in [x for x in outliers_removed_data.columns if x not in time_series_variables]:
+        print(f"Interpolating for variable {variable}")
+        to_impute = outliers_removed_data[variable].isna().values
+        clean_data.loc[to_impute, variable] = clean_data[variable].mode()
 
     # save clean dataset
     clean_data.to_csv(path_to_clean_dataset)
@@ -225,11 +243,11 @@ def distribution_plots(clean_training_data:pd.DataFrame=None, path_to_plots:str=
     for variable in [x for x in clean_training_data.columns if x not in clean_training_data.select_dtypes("number").columns]:
         fig = plt.figure(figsize=(8,5))
         ax = fig.add_subplot()
-        sns.countplot(variable)
+        sns.countplot(data=clean_training_data, x=variable)
         ax.set_title(f"{variable}: Distribution")
         ax.set_xlabel(variable)
         ax.set_ylabel("Number of Observations")
-        ax.legend()
+        ax.bar_label(ax.containers[0])
         # Save the plot as a PNG image with 300 pixels per inch (ppi)
         variable = variable.replace(r"/", "-")
         fig.savefig(r'{}/{}.png'.format(path_to_plots, variable), dpi=300)
@@ -244,17 +262,18 @@ def scatterplots(clean_training_data:pd.DataFrame=None, path_to_plots:str=None, 
         except: clean_training_data = impute_missing_values(**kwargs)
     else: clean_training_data = clean_training_data.copy() # avoid overwriting
 
-    # define where to save the distribution plots
+    # define where to save the scatterplots
     if path_to_plots is None: path_to_plots = r"Static Visuals/Scatterplots"
 
-    # create distribution plots
+    # create scatterplots for continuous predictors
     dependent_variable = "Energy Demand (MWH)"
-    for variable in clean_training_data.columns:
+    continuous_variables = list(clean_training_data.select_dtypes("number").columns)
+    for variable in continuous_variables:
         if variable == dependent_variable: # plot heatmap of correlation coefficients
             correlations = clean_training_data.select_dtypes("number").corr()
             fig = plt.figure(figsize=(30,30))
             ax = fig.add_subplot()
-            sns.heatmap(correlations, annot=True, fmt=".2f")
+            sns.heatmap(correlations, annot=True, fmt=".2f", annot_kws={"fontsize":14})
             plt.fontsize=20
             plt.title("Correlations Between Variables", size=20)
 
@@ -269,28 +288,56 @@ def scatterplots(clean_training_data:pd.DataFrame=None, path_to_plots:str=None, 
             # plot scatter plot
             fig = plt.figure(figsize=(8,5))
             ax = fig.add_subplot()
-            sns.regplot(x=clean_training_data[variable], y=clean_training_data["Energy Demand (MWH)"], 
+            sns.regplot(x=clean_training_data[variable], y=clean_training_data[dependent_variable], 
                 label="Correlation: {:.2f}".format(corr), line_kws=dict(color="r"), order=3)
             ax.set_title("Relationship between Energy Demand and {}".format(variable))
             ax.set_xlabel(variable)
-            ax.set_ylabel("Energy Demand (MWH)")
+            ax.set_ylabel(dependent_variable)
             ax.legend()
 
             # Save the plot as a PNG image with 300 pixels per inch (ppi)
             variable = variable.replace(r"/", "-")
             fig.savefig(r'{}/{}.png'.format(path_to_plots, variable), dpi=300)
             plt.close()
+    # scatter plots for categorical predictors
+    for variable in [x for x in clean_training_data.columns if x not in continuous_variables]:
+        # calculate average value of dependent variable for each category of predictor
+        means = clean_training_data.groupby(by=[variable])[dependent_variable].mean()
+
+        # scatter plot
+        fig = plt.figure(figsize=(8,5))
+        ax = fig.add_subplot()
+        sns.scatterplot(data=clean_training_data, x=variable, y=dependent_variable)
+        sns.lineplot(means, label="OLS Regression Line", color="red")
+        ax.set_title("Relationship between Energy Demand and {}".format(variable))
+        ax.set_xlabel(variable)
+        ax.set_ylabel(dependent_variable)
+        ax.legend()
+
+        # Save the plot as a PNG image with 300 pixels per inch (ppi)
+        variable = variable.replace(r"/", "-")
+        fig.savefig(r'{}/{}.png'.format(path_to_plots, variable), dpi=300)
+        plt.close()
 
 
 # function to produce time series decompositions for each numerical variable (and save the residuals for future modeling)
-def time_series_decompositions(clean_training_data:pd.DataFrame=None, path_to_prophet_models:str=None, path_to_plots:str=None, **kwargs):
+def time_series_decompositions(clean_training_data:pd.DataFrame=None, path_to_prophet_models:str=None, 
+    path_to_plots:str=None, save_residuals:bool=True, path_to_residual_dataset:str=None, produce_plots:bool=True, 
+    **kwargs):
+
+    # get clean training dataset if not provided
     if clean_training_data is None: 
         try: clean_training_data = pd.read_csv(r"Datasets/clean_training.csv", index_col=0)
         except: clean_training_data = impute_missing_values(**kwargs)
     else: clean_training_data = clean_training_data.copy() # avoid overwriting
 
+    # get path to plots if not provided
     if path_to_plots is None: path_to_plots = r"Static Visuals/Decompositions"
+
+    # get path to prophet models if not provided
     if path_to_prophet_models is None: path_to_prophet_models = r"Models/Prophet"
+
+    # loop through each variable, producing time series decomposition and optionally saving residuals
     for variable in clean_training_data.select_dtypes("number").columns:
         file_variable = variable.replace(r"/", "-")
         with open(r"{}/{}.pkl".format(path_to_prophet_models, file_variable), "rb") as file:
@@ -301,82 +348,97 @@ def time_series_decompositions(clean_training_data:pd.DataFrame=None, path_to_pr
         forecasts['y'] = df['y'].values
         forecasts["residual"] = df["y"].values - forecasts["yhat"].values
 
-        # define figure
-        fig = plt.figure(figsize=(5,15))
+        if save_residuals: clean_training_data.loc[:,variable] = forecasts["residual"].values
 
-        # plot original time series
-        ax = fig.add_subplot(6,1,1)
-        sns.lineplot(x=forecasts["ds"].index, y=forecasts['y'])
-        ax.set_title("Original Time Series for {}".format(variable))
-        ax.set_xlabel("Time")
-        ax.set_ylabel(variable)
+        if produce_plots:
+            # define figure
+            fig = plt.figure(figsize=(8,15))
 
-        # plot trend component
-        ax = fig.add_subplot(6,1,2)
-        sns.lineplot(x = forecasts["ds"], y=forecasts["trend"])
-        ax.set_title("Trend Component for {}".format(variable))
-        ax.set_xlabel("Time")
-        ax.set_ylabel(variable)
+            # plot original time series
+            ax = fig.add_subplot(6,1,1)
+            sns.lineplot(x=forecasts["ds"].index, y=forecasts['y'])
+            ax.set_title("Original Time Series for {}".format(variable))
+            ax.set_xlabel("Time")
+            ax.set_ylabel(variable)
 
-        # plot yearly seasonality
-        ax = fig.add_subplot(6,1,3)
-        sns.lineplot(x = forecasts["ds"], y=forecasts["yearly"])
-        ax.set_title("Yearly Seasonality for {}".format(variable))
-        ax.set_xlabel("Time")
-        ax.set_ylabel(variable)
+            # plot trend component
+            ax = fig.add_subplot(6,1,2)
+            sns.lineplot(x = forecasts["ds"], y=forecasts["trend"])
+            ax.set_title("Trend Component for {}".format(variable))
+            ax.set_xlabel("Time")
+            ax.set_ylabel(variable)
 
-        # plot weekly seasonality
-        ax = fig.add_subplot(6,1,4)
-        sns.lineplot(x = forecasts["ds"], y=forecasts["weekly"])
-        ax.set_title("Weekly Seasonality for {}".format(variable))
-        ax.set_xlabel("Time")
-        ax.set_ylabel(variable)
-        # change axis limits
-        ax.set_xlim(forecasts["ds"].iloc[0], forecasts["ds"].iloc[100*7])
-        labels = [str(x)[-8:-2] for x in ax.get_xticklabels()]
-        ax.set_xticklabels(labels)
+            # plot yearly seasonality
+            ax = fig.add_subplot(6,1,3)
+            sns.lineplot(x = forecasts["ds"], y=forecasts["yearly"])
+            ax.set_title("Yearly Seasonality for {}".format(variable))
+            ax.set_xlabel("Time")
+            ax.set_ylabel(variable)
 
-        # plot daily seasonlity
-        ax = fig.add_subplot(6,1,5)
-        sns.lineplot(x = forecasts["ds"], y=forecasts["daily"])
-        ax.set_title("Daily Seasonality for {}".format(variable))
-        ax.set_xlabel("Time")
-        ax.set_ylabel(variable)
-        # change axis limits
-        ax.set_xlim(forecasts["ds"].iloc[0], forecasts["ds"].iloc[100])
-        labels = [str(x)[-10:-5] for x in ax.get_xticklabels()]
-        ax.set_xticklabels(labels)
+            # plot weekly seasonality
+            ax = fig.add_subplot(6,1,4)
+            sns.lineplot(x = forecasts["ds"], y=forecasts["weekly"])
+            ax.set_title("Weekly Seasonality for {}".format(variable))
+            ax.set_xlabel("Time")
+            ax.set_ylabel(variable)
+            # change axis limits
+            ax.set_xlim(forecasts["ds"].iloc[0], forecasts["ds"].iloc[100*7])
+            labels = [str(x)[-8:-2] for x in ax.get_xticklabels()]
+            ax.set_xticklabels(labels)
 
-        # plot residual component
-        ax = fig.add_subplot(6,1,6)
-        sns.lineplot(x = forecasts["ds"], y=forecasts["residual"])
-        ax.set_title("Residual Component for {}".format(variable))
-        ax.set_xlabel("Time")
-        ax.set_ylabel(variable)
+            # plot daily seasonlity
+            ax = fig.add_subplot(6,1,5)
+            sns.lineplot(x = forecasts["ds"], y=forecasts["daily"])
+            ax.set_title("Daily Seasonality for {}".format(variable))
+            ax.set_xlabel("Time")
+            ax.set_ylabel(variable)
+            # change axis limits
+            ax.set_xlim(forecasts["ds"].iloc[0], forecasts["ds"].iloc[100])
+            labels = [str(x)[-10:-5] for x in ax.get_xticklabels()]
+            ax.set_xticklabels(labels)
 
-        # save figure
-        plt.tight_layout()
-        # Save the plot as a PNG image with 300 pixels per inch (ppi)
-        variable = variable.replace(r"/", "-")
-        fig.savefig(r'{}/{}.png'.format(path_to_plots, variable), dpi=300)
-        plt.close()
+            # plot residual component
+            ax = fig.add_subplot(6,1,6)
+            sns.lineplot(x = forecasts["ds"], y=forecasts["residual"])
+            ax.set_title("Residual Component for {}".format(variable))
+            ax.set_xlabel("Time")
+            ax.set_ylabel(variable)
+
+            # save figure
+            plt.tight_layout()
+            # Save the plot as a PNG image with 300 pixels per inch (ppi)
+            variable = variable.replace(r"/", "-")
+            fig.savefig(r'{}/{}.png'.format(path_to_plots, variable), dpi=300)
+            plt.close()
+    
+    if save_residuals:
+        if path_to_residual_dataset is None: path_to_residual_dataset = r"Datasets/residuals.csv"
+        clean_training_data.to_csv(path_to_residual_dataset)
+
+    return clean_training_data # really the residuals
 
 
-def save_residuals(clean_training_data:pd.DataFrame=None, path_to_clean_dataset:str=None, 
-    path_to_prophet_models:str=None, path_to_residual_dataset:str=None):
+# obtain time series residuals from decompositions
+def calculate_residuals(clean_training_data:pd.DataFrame=None, path_to_clean_dataset:str=None, 
+    path_to_prophet_models:str=None, path_to_residual_dataset:str=None, save_residuals:bool=True, **kwargs):
+
+    # get clean training dataset if not provided
     if clean_training_data is None:
         if path_to_clean_dataset is None: clean_training_data = pd.read_csv(r"Datasets/clean_training.csv")
-        else: path_to_clean_dataset = pd.read_csv(path_to_clean_dataset)
-    if path_to_prophet_models is None: path_to_prophet_models = r"Models/Prophet"
-    if path_to_residual_dataset is None: path_to_residual_dataset = r"Datasets/residuals.csv"
+        else: clean_training_data = pd.read_csv(path_to_clean_dataset)
+
+    # get residuals from time series decompositions without making plots
+    return time_series_decompositions(clean_training_data=clean_training_data, path_to_prophet_models=path_to_prophet_models, 
+        save_residuals=save_residuals, path_to_residual_dataset=path_to_residual_dataset, no_plots=True, **kwargs)
+
+
+
 
     
 
 
 ### Helper Functions ###
 ########################
-
-
 
 
 # a helper function for identifying outliers
@@ -418,8 +480,6 @@ def fit_prophet_models(outliers_removed_dataset:pd.DataFrame, tune_hyperparamete
     # grid search hyperparameter tune for prophet models
 
     # save results to "Tuning Results/prophet.pkl"
-
-
 
 
 
