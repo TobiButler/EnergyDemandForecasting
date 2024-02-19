@@ -12,22 +12,21 @@ app = dash.Dash(__name__, suppress_callback_exceptions=True)
 
 ### Define the four pages ### only one page will ever be active at a time
 
-# Define landing page layout
+# Define landing page default layout
 lp_button_ids = dict(zip(["page1", "page2", "page3"], ["lp_to_p1", "lp_to_p2", "lp_to_p3"]))
 landing_page_layout = html.Div([
     html.H1('Energy Demand Forecasting Application'),
-    html.Div([
-        html.Button('Page 1', id=lp_button_ids['page1'], n_clicks=0),
-        html.Br(),
-        html.Button('Page 2', id=lp_button_ids['page2'], n_clicks=0),
-        html.Br(),
-        html.Button('Page 3', id=lp_button_ids['page3'], n_clicks=0),
+    html.Div(style={'width': '100%', 'display': 'flex', 'justify-content': 'space-between'}, children=[
+        html.Button('Page 1', id=lp_button_ids['page1'], n_clicks=0, style={'width': '30%'}),
+        html.Button('Page 2', id=lp_button_ids['page2'], n_clicks=0, style={'width': '30%'}),
+        html.Button('Page 3', id=lp_button_ids['page3'], n_clicks=0, style={'width': '30%'}),
     ])
 ])
 
 
 encoded_image = base64.b64encode(open("Static Visuals/ed_outliers.png", 'rb').read())
-# Define page 1
+# Define page 1 default layout
+p1_button_ids = dict(zip(["homepage", "page2", "page3"], ["p1_to_lp", "p1_to_p2", "p1_to_p3"]))
 page1_layout = html.Div([
     html.H1('Part 1: Exploring the Data'),
     html.Div([
@@ -40,16 +39,15 @@ page1_layout = html.Div([
         ])
         
     ]),
-    html.Div([
-        dcc.Link('Page 1', href='/page-1'),
-        html.Br(),
-        dcc.Link('Page 2', href='/page-2'),
-        html.Br(),
-        dcc.Link('Page 3', href='/page-3'),
+    html.Div(style={'width': '100%', 'display': 'flex', 'justify-content': 'space-between'}, children=[
+        html.Button('Home Page', id=p1_button_ids['homepage'], n_clicks=0, style={'width': '30%'}),
+        html.Button('Page 2', id=p1_button_ids['page2'], n_clicks=0, style={'width': '30%'}),
+        html.Button('Page 3', id=p1_button_ids['page3'], n_clicks=0, style={'width': '30%'}),
     ])
 ])
 
-# Define page 2
+# Define page 2 default layout
+p2_button_ids = dict(zip(["homepage", "page1", "page3"], ["p2_to_lp", "p2_to_p1", "p2_to_p3"]))
 page2_layout = html.Div([
     html.H1('Page 2'),
     html.Div([
@@ -57,16 +55,16 @@ page2_layout = html.Div([
         dcc.Graph(id='page2-graph2'),
         dcc.Graph(id='page2-graph3')
     ]),
-    html.Div([
-        dcc.Link('Page 1', href='/page-1'),
-        html.Br(),
-        dcc.Link('Page 2', href='/page-2'),
-        html.Br(),
-        dcc.Link('Page 3', href='/page-3'),
+    html.Div(style={'width': '100%', 'display': 'flex', 'justify-content': 'space-between'}, children=[
+        html.Button('Home Page', id=p2_button_ids['homepage'], n_clicks=0, style={'width': '30%'}),
+        html.Button('Page 1', id=p2_button_ids['page1'], n_clicks=0, style={'width': '30%'}),
+        html.Button('Page 3', id=p2_button_ids['page3'], n_clicks=0, style={'width': '30%'}),
     ])
 ])
 
-# Define Page 3
+
+# Define Page 3 default layout
+p3_button_ids = dict(zip(["homepage", "page1", "page2"], ["p3_to_lp", "p3_to_p1", "p3_to_p2"]))
 page3_layout = html.Div([
     html.H1('Page 3'),
     dcc.Graph(
@@ -82,12 +80,10 @@ page3_layout = html.Div([
         marks={i: str(i) for i in range(0, 366, 10)}
     ),
     html.Div(id='slider-output-container'),
-    html.Div([
-        dcc.Link('Page 1', href='/page-1'),
-        html.Br(),
-        dcc.Link('Page 2', href='/page-2'),
-        html.Br(),
-        dcc.Link('Page 3', href='/page-3'),
+    html.Div(style={'width': '100%', 'display': 'flex', 'justify-content': 'space-between'}, children=[
+        html.Button('Home Page', id=p3_button_ids['homepage'], n_clicks=0, style={'width': '30%'}),
+        html.Button('Page 1', id=p3_button_ids['page1'], n_clicks=0, style={'width': '30%'}),
+        html.Button('Page 2', id=p3_button_ids['page2'], n_clicks=0, style={'width': '30%'}),
     ])
 ])
 
@@ -95,29 +91,65 @@ page3_layout = html.Div([
 
 ### Define Callbacks for Navigation ###
 
-# Callback for landing page navigation
+# Callback for all page navigation
 @app.callback(Output('url', 'pathname'), [Input(lp_button_ids["page1"], 'n_clicks'), 
-    Input(lp_button_ids["page2"], 'n_clicks'), Input(lp_button_ids["page3"], 'n_clicks')]
+    Input(lp_button_ids["page2"], 'n_clicks'), Input(lp_button_ids["page3"], 'n_clicks'),
+    Input(p1_button_ids["homepage"], 'n_clicks'), Input(p1_button_ids["page2"], 'n_clicks'), 
+    Input(p1_button_ids["page3"], 'n_clicks'), Input(p2_button_ids["homepage"], 'n_clicks'), 
+    Input(p2_button_ids["page1"], 'n_clicks'), Input(p2_button_ids["page3"], 'n_clicks'), 
+    Input(p3_button_ids["homepage"], 'n_clicks'), Input(p3_button_ids["page1"], 'n_clicks'), 
+    Input(p3_button_ids["page2"], 'n_clicks'),
+    ]
 )
-def landing_page_navigation(lp_to_p1_clicks, lp_to_p2_clicks, lp_to_p3_clicks):
+def page_navigation(*buttons):
     ctx = dash.callback_context
-    # if not ctx.triggered:
-    #     return landing_page_layout
-    # else:
-    # button_id = ctx.triggered[0]['prop_id'].split('.')[0]
     button_id = ctx.triggered_id
     print(button_id)
-    if button_id == lp_button_ids["page1"]:
+    if button_id in(lp_button_ids["page1"], p2_button_ids["page1"], p3_button_ids["page1"]):
         # return page1_layout
         return '/page-1'
-    elif button_id == lp_button_ids["page2"]:
-        return '/page-1'
-    elif button_id == lp_button_ids["page3"]:
+    elif button_id in (lp_button_ids["page2"], p1_button_ids["page2"], p3_button_ids["page2"]):
+        return '/page-2'
+    elif button_id in (lp_button_ids["page3"], p1_button_ids["page3"], p2_button_ids["page3"]):
         return '/page-3'
     else:
         return landing_page_layout
 
-# Callback for page 1 navigation
+# # Callback for landing page navigation
+# @app.callback(Output('url', 'pathname', allow_duplicate=True), [Input(lp_button_ids["page1"], 'n_clicks'), 
+#     Input(lp_button_ids["page2"], 'n_clicks'), Input(lp_button_ids["page3"], 'n_clicks')]
+# )
+# def landing_page_navigation(lp_to_p1_clicks, lp_to_p2_clicks, lp_to_p3_clicks):
+#     ctx = dash.callback_context
+#     button_id = ctx.triggered_id
+#     print(button_id)
+#     if button_id == lp_button_ids["page1"]:
+#         # return page1_layout
+#         return '/page-1'
+#     elif button_id == lp_button_ids["page2"]:
+#         return '/page-2'
+#     elif button_id == lp_button_ids["page3"]:
+#         return '/page-3'
+#     else:
+#         return landing_page_layout
+
+# # Callback for page 1 navigation
+# @app.callback(Output('url', 'pathname', allow_duplicate=True, prevent_initial_call=True), [Input(p1_button_ids["homepage"], 'n_clicks'), 
+#     Input(p1_button_ids["page2"], 'n_clicks'), Input(p1_button_ids["page3"], 'n_clicks')]
+# )
+# def landing_page_navigation(p1_to_lp_clicks, p1_to_p2_clicks, p1_to_p3_clicks):
+#     ctx = dash.callback_context
+#     button_id = ctx.triggered_id
+#     print(button_id)
+#     if button_id == p1_button_ids["page1"]:
+#         # return page1_layout
+#         return '/'
+#     elif button_id == p1_button_ids["page2"]:
+#         return '/page-2'
+#     elif button_id == p1_button_ids["page3"]:
+#         return '/page-3'
+#     else:
+#         return landing_page_layout
 
 # callback for page 2 navigation
 

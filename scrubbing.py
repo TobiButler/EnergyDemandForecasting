@@ -17,8 +17,40 @@ import pickle as pkl
 
 
 # run all data cleaning functions
-def main():
-    pass
+def main(preliminary_dataset:pd.DataFrame=None, path_to_prelim_dataset:str=None, produce_plots:bool=True, reduced_variables:bool=False):
+    if preliminary_dataset is None:
+        if path_to_prelim_dataset is None:
+            preliminary_dataset = pd.read_csv(r"Datasets/preliminary.csv")
+        else:
+            preliminary_dataset = pd.read_csv(path_to_prelim_dataset)
+    
+    # split dataset into training and holdout evaluation sets
+    training_data = split_preliminary_dataset(prelim_dataset=preliminary_dataset)
+
+    if produce_plots:
+        # produce raw time series plots
+        raw_time_series_plots(prelim_training_data=training_data)
+
+    # convert numerical variables to ordinal categorical where appropriate (ex: Hourly Precipitation)
+    transformed_training_data = transform_variables(prelim_training_data=preliminary_dataset)
+
+    # identify outliers and produce plots
+    outliers_removed = identify_outliers(transformed_training_data=transformed_training_data)
+
+    # impute missing data and outlier values
+    clean_training_data = impute_missing_values(outliers_removed_data=outliers_removed)
+
+    if produce_plots:
+        # produce distribution plots
+        distribution_plots(clean_training_data=clean_training_data)
+
+        # produce scatterplots with dependent variable
+        scatterplots(clean_training_data=clean_training_data)
+
+        # produce time series decomposition plots
+        time_series_decompositions(clean_training_data=clean_training_data)
+
+
 
 
 # function to split dataset into training and holdout test datasets
@@ -330,6 +362,21 @@ def time_series_decompositions(clean_training_data:pd.DataFrame=None, path_to_pr
         plt.close()
 
 
+def save_residuals(clean_training_data:pd.DataFrame=None, path_to_clean_dataset:str=None, 
+    path_to_prophet_models:str=None, path_to_residual_dataset:str=None):
+    if clean_training_data is None:
+        if path_to_clean_dataset is None: clean_training_data = pd.read_csv(r"Datasets/clean_training.csv")
+        else: path_to_clean_dataset = pd.read_csv(path_to_clean_dataset)
+    if path_to_prophet_models is None: path_to_prophet_models = r"Models/Prophet"
+    if path_to_residual_dataset is None: path_to_residual_dataset = r"Datasets/residuals.csv"
+
+    
+
+
+### Helper Functions ###
+########################
+
+
 
 
 # a helper function for identifying outliers
@@ -363,6 +410,17 @@ def detect_outliers(data:pd.Series, n:int=1000, p:float=0.001):
             outliers[i] = True
 
     return outliers
+
+
+
+def fit_prophet_models(outliers_removed_dataset:pd.DataFrame, tune_hyperparameters:bool=False):
+    pass
+    # grid search hyperparameter tune for prophet models
+
+    # save results to "Tuning Results/prophet.pkl"
+
+
+
 
 
 
