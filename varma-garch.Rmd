@@ -9,7 +9,11 @@ library(tidytable)
 library(rmgarch)
 library(MTS)
 library(forecast)
+library(vars)
+library(reticulate)
 ```
+
+
 
 ```{r}
 print(getwd())
@@ -32,9 +36,6 @@ head(training_data,5)
 # sapply(training_data, class)
 ```
 
-```{r}
-which(colnames(training_data)=="HourlyPrecipitation")
-```
 
 
 ```{r}
@@ -91,25 +92,13 @@ dim(orthogonal_data)
 ```
 
 ```{r}
-test <- cbind(not_pca_data, orthogonal_data)[,1:5]
-test
+endogenous_data <- cbind(not_pca_data, orthogonal_data)[,1:5]
+endogenous_data
 ```
 
-```{r}
-library(vars)
-```
+
 
 ```{r}
-
-# Create a data frame or matrix containing all variables
-# Here, 'data' is your data frame or matrix containing all variables
-# endogenous_vars and exogenous_vars contain the names of the respective variables
-endog_data <- test[, "Energy.Demand..MWH."]
-exog_data <- subset(test, select = !(names(test) %in% c("Energy.Demand..MWH.")))
-# endog_data
-# exog_data
-library(vars)
-
 var_model <- vars::VAR(test, p=10, type="const")
 
 ```
@@ -127,10 +116,67 @@ predictions <- predictions$fcst$Energy.Demand..MWH.
 plot(predictions[,"fcst"])
 ```
 
-Now fit the GARCH model
+Fit Prophet Models for squared errors based on residuals from VAR model
+
+
+Fit VAR Model for squared errors based on residuals from Prophet models above
+
+
+Final model will need to be composed of all point forecasting Prophet models, point forecasting VAR model, single error forecasting Prophet model, and the error forecasting VAR model.
+
 ```{r}
 
 ```
+
+
+```{r}
+dim(endogenous_data)[2]
+```
+
+
+Now fit the GARCH model
+```{r}
+library(rmgarch)
+library(parallel)
+library(quantmod)
+
+test <- endogenous_data[,1:2]
+# dim(test)
+
+xspec = ugarchspec(mean.model = list(armaOrder = c(1, 1)), variance.model = list(garchOrder = c(1,1), model = 'sGARCH'), distribution.model = 'norm')
+uspec = multispec(replicate(dim(test)[2], xspec))
+spec1 = dccspec(uspec = uspec, dccOrder = c(1, 1), distribution = 'mvnorm')
+spec1a = dccspec(uspec = uspec, dccOrder = c(1, 1), model='aDCC', distribution = 'mvnorm')
+
+```
+
+```{r}
+
+c <- cov(test)
+det(c)
+```
+
+
+```{r}
+cl = makePSOCKcluster(2)
+multf = multifit(uspec, test, cluster = cl)
+
+fit1 = dccfit(spec1, data = test, fit.control = list(eval.se = TRUE), fit = multf, cluster = cl)
+# fit_adcc = dccfit(spec1, data = test, fit.control = list(eval.se = TRUE), fit = multf, cluster = cl)
+print(fit1)           
+# print(fit_adcc)
+
+stopCluster(cl)
+```
+
+```{r}
+garch_predictions <- dccforecast(fit=fit1, n.ahead = 1)
+```
+
+```{r}
+plot(sigma(garch_predictions)[,1,1])
+```
+
 
 
 ```{r}
