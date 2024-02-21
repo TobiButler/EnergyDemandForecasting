@@ -31,7 +31,8 @@ landing_page_layout = html.Div([
     ])
 ])
 
-# HERE want to add dropdown for each type of plot. Only offer the relevant variables for each type of plot (ex: only show outliers plotted for variables that have outliers.)
+# HERE want to add dropdown for each type of plot. Only offer the relevant variables for each type of plot 
+# (ex: only show outliers plotted for variables that have outliers.)
 
 # Specify the directory path for raw-time-series plots
 rts_directory = r"Plotly Figures/Raw Time Series" 
@@ -44,9 +45,9 @@ variables = [x[:-4] for x in os.listdir(outlier_directory)] # Get a list of asso
 outlier_dropdown_options = [{"label":variable, "value":variable} for variable in variables]
 
 # specify the directory path for distribution plots
-distribution_directory = r"Static Visuals/Distributions"
-variables = [x[:-4] for x in os.listdir(distribution_directory)] # Get a list of associated variables
-distribution_dropdown_options = [{"label":variable, "value":variable} for variable in variables]
+# distribution_directory = r"Static Visuals/Distributions"
+# variables = [x[:-4] for x in os.listdir(distribution_directory)] # Get a list of associated variables
+# distribution_dropdown_options = [{"label":variable, "value":variable} for variable in variables]
 
 # specify the directory path for scatterplots
 scatterplot_directory = r"Static Visuals/Scatterplots"
@@ -88,6 +89,7 @@ page1_layout = html.Div([
                 value="Energy Demand (MWH)"  # Default value
             ),
             html.Img(id='distribution'),
+            html.Br(),
             html.Img(id='scatterplot'),
 
             html.Br(),
@@ -173,35 +175,70 @@ def page_navigation(*buttons):
         return ""
 
 ### Define Callbacks for Page 1 ###
-# need to break this up into five callbacks
-@app.callback(
-    [Output('raw-time-series', 'children'), Output('outliers', 'children'), 
-        Output('distribution', 'src'), Output('scatterplot', 'src'), 
-        Output('decomposition', 'src')],
-    [Input('page1-dropdown', 'value')]
-)
-def update_page1_graphs(variable):
+@app.callback([Output('raw-time-series', 'children')], [Input('rts-dropdown', 'value')])
+def update_rts(variable):
     # update raw time series plot
     path = r"Plotly Figures/Raw Time Series/{}.pkl".format(variable)
     raw_time_series_figure = load_plotly_figure(path)
+    return raw_time_series_figure
 
+@app.callback([Output('outliers', 'children')], [Input('outliers-dropdown', 'value')])
+def update_outliers_fig(variable):
     # update outliers plot
     path = r"Plotly Figures/Outlier Detection/{}.pkl".format(variable)
     outliers_figure = load_plotly_figure(path)
-        
-    # update distribution plot
-    path = r"Static Visuals/Distributions/{}.png".format(variable)
-    distribution_image = load_static_image(path=path)
-        
+    return outliers_figure
+
+@app.callback(
+    [Output('distribution', 'src'), Output('scatterplot', 'src')], [Input('scatterplots-dropdown', 'value')]
+)
+def update_distribution_scatterplot(variable):
     # update scatterplot
     path = r"Static Visuals/Scatterplots/{}.png".format(variable)
     scatterplot_image = load_static_image(path=path)
-        
+    
+    # update distribution plot
+    path = r"Static Visuals/Distributions/{}.png".format(variable)
+    distribution_image = load_static_image(path=path)
+
+    return distribution_image, scatterplot_image
+
+@app.callback([Output('decomposition', 'src')], [Input('decomposition-dropdown', 'value')])
+def update_decomposition_plot(variable):
     # update time-series decomposition
     path = r"Static Visuals/Decompositions/{}.png".format(variable)
+    print(path)
     decomposition_image = load_static_image(path=path)
+    return decomposition_image
 
-    return raw_time_series_figure, outliers_figure, distribution_image, scatterplot_image, decomposition_image
+# @app.callback(
+#     [Output('raw-time-series', 'children'), Output('outliers', 'children'), 
+#         Output('distribution', 'src'), Output('scatterplot', 'src'), 
+#         Output('decomposition', 'src')],
+#     [Input('page1-dropdown', 'value')]
+# )
+# def update_page1_graphs(variable):
+#     # update raw time series plot
+#     path = r"Plotly Figures/Raw Time Series/{}.pkl".format(variable)
+#     raw_time_series_figure = load_plotly_figure(path)
+
+#     # update outliers plot
+#     path = r"Plotly Figures/Outlier Detection/{}.pkl".format(variable)
+#     outliers_figure = load_plotly_figure(path)
+        
+#     # update distribution plot
+#     path = r"Static Visuals/Distributions/{}.png".format(variable)
+#     distribution_image = load_static_image(path=path)
+        
+#     # update scatterplot
+#     path = r"Static Visuals/Scatterplots/{}.png".format(variable)
+#     scatterplot_image = load_static_image(path=path)
+        
+#     # update time-series decomposition
+#     path = r"Static Visuals/Decompositions/{}.png".format(variable)
+#     decomposition_image = load_static_image(path=path)
+
+#     return raw_time_series_figure, outliers_figure, distribution_image, scatterplot_image, decomposition_image
 
 ### Define Callbacks for Page 2 ###
 
@@ -286,7 +323,7 @@ def load_plotly_figure(path):
         figure=figure
     )
 
-    return graph
+    return [graph]
 
 
 def load_static_image(path):
@@ -315,4 +352,5 @@ def load_static_image(path):
 
 # Run the application when script is run
 if __name__ == '__main__':
-    app.run_server(debug=True, host='0.0.0.0')
+    # app.run_server(debug=True, host='0.0.0.0', port=8050)
+    app.run_server(debug=True, host='localhost', port=8050)

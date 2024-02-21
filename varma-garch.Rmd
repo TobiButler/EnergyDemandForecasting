@@ -4,15 +4,20 @@ output: html_notebook
 ---
 
 ```{r}
-library(tidyverse)
+# library(tidyverse)
+library(tidytable)
 library(rmgarch)
 library(MTS)
 library(forecast)
 ```
 
+```{r}
+print(getwd())
+```
+
 
 ```{r}
-training_data = read.csv(r"(clean_training_data.csv)", row.names = 1)
+training_data = read.csv(r"(Datasets/residuals.csv)", row.names = 1)
 ```
 
 ```{r}
@@ -28,83 +33,138 @@ head(training_data,5)
 ```
 
 ```{r}
-training_data["EnergyDemand"] <- msts(training_data["EnergyDemand"], seasonal.periods=c(24, 24*365.25))
+which(colnames(training_data)=="HourlyPrecipitation")
 ```
 
 
-Fit TBATS model to account for multiple seasonality periods
 ```{r}
-tbats_model <- tbats(msts(training_data["EnergyDemand"], seasonal.periods=c(24, 24*365.25)), seasonal.periods = c(24, 24*365.25))
+dummified_data <- training_data %>% get_dummies(drop_first = TRUE)
+dummified_data = subset(dummified_data, select = !(names(dummified_data) %in% c("HourlyPrecipitation")))
 ```
 
 ```{r}
-plot(tbats_model)
+colnames(dummified_data)
 ```
 
-Holtz-Winters
-```{r}
-# Assuming 'ts_data' is your hourly time series data
-hw_model <- HoltWinters(msts(training_data["EnergyDemand"], seasonal.periods=c(24, 24*365.25)), seasonal = c("additive"), beta = TRUE)
 
+Separate Energy Demand and Temperature. PCA the rest.
+```{r}
+not_pca_vars = c("Energy.Demand..MWH.", "HourlyDryBulbTemperature")
 ```
 
-Applying Differencing to remove trend, yearly seasonality, and daily seasonality
+
 ```{r}
-ts_data <- training_data[["EnergyDemand"]]
-yearly_period = 24*365.25
-daily_period = 24
-first_diffs <- diff(ts_data)
-daily_diffs <- diff(first_diffs, lag = 24)
-yearly_diffs <- diff(daily_diffs, lag = 365.25*24)
+not_pca_data <- dummified_data[, c("Energy.Demand..MWH.", "HourlyDryBulbTemperature")]
+pca_data <- subset(dummified_data, select = !(names(dummified_data) %in% not_pca_vars))
+scaled_data <- scale(pca_data)
+# scaled_data
+```
 
-# reconstruct original time series
-# reconstruct daily diffs
-lags <- lag(yearly_diffs, 365.25*24)
-lags <- lags[!is.na(lags)]
-# lags
-reconstructed_daily_diffs <- lags + yearly_diffs[]
+```{r}
+pca_result <- prcomp(scaled_data)
+```
 
-# reconstruct first-order diffs
-lags <- lag(reconstructed_daily_diffs, 24)
-lags <- lags[!is.na(lags)]
-# reconstructed_ts <- lags + reconstructed_diff_1
-reconstructed_first_diffs <- lags + yearly_diffs
-  
-# reconstruct original time series
-reconstructed_ts <- cumsum(reconstructed_first_diffs)
-# reconstructed_ts
+
+```{r}
+# # Principal components
+# pca_result$rotation
 # 
-# plot(ts_data)
-plot(first_diffs)
-# plot(daily_diffs)
-# plot(yearly_diffs)
-# plot(reconstructed_daily_diffs)
-plot(reconstructed_first_diffs)
-# plot(reconstructed_ts)
+# # Standard deviations of principal components
+# pca_result$sdev
+
+# Proportion of variance explained by each principal component
+prop_var <- (pca_result$sdev^2) / sum(pca_result$sdev^2)
+prop_var
 ```
+
+```{r}
+# Scree plot
+pca_keep <- prop_var > 1e-3
+# pca_keep
+orthogonal_data <- scaled_data %*% pca_result$rotation[,pca_keep]
+dim(pca_result$rotation[,pca_keep])
+dim(scaled_data)
+  # as.data.frame(pca_result$rotation[,pca_keep])
+# HOW TO CONVERT THIS INTO A DATAFRAME WITH COLUMNS...
+dim(orthogonal_data)
+# orthogonal_data
+```
+
+```{r}
+test <- cbind(not_pca_data, orthogonal_data)[,1:5]
+test
+```
+
+```{r}
+library(vars)
+```
+
+```{r}
+
+# Create a data frame or matrix containing all variables
+# Here, 'data' is your data frame or matrix containing all variables
+# endogenous_vars and exogenous_vars contain the names of the respective variables
+endog_data <- test[, "Energy.Demand..MWH."]
+exog_data <- subset(test, select = !(names(test) %in% c("Energy.Demand..MWH.")))
+# endog_data
+# exog_data
+library(vars)
+
+var_model <- vars::VAR(test, p=10, type="const")
+
+```
+
+```{r}
+summary(var_model)
+```
+
+```{r}
+predictions <- predict(var_model, n.ahead=1000)
+predictions <- predictions$fcst$Energy.Demand..MWH.
+```
+
+```{r}
+plot(predictions[,"fcst"])
+```
+
+Now fit the GARCH model
+```{r}
+
+```
+
+
+```{r}
+predictions <- VARpred(var_model, h=10, output = FALSE)
+```
+
+
+```{r}
+predictions
+plot(predictions)
+```
+
+
 
 
 
 
 ```{r}
-mstl_model <- mstl(msts(training_data["EnergyDemand"], seasonal.periods=c(24, 24*365.25)))
+times <- training_data %>% rownames()
+print(times)
 ```
 
 
+
+Fit multivariate GARCH model
 ```{r}
-autoplot(mstl_model)
-```
-
-Extract the remainder to model using VARMA-GARCH
-```{r}
-energy_demand_residuals <- mstl_model[,"Remainder"]
-plot(energy_demand_residuals)
-# mstl_model[,"Remainder"]
+time_series_object <- ts(training_data, start = c(2022, 1), frequency = 24)  # Frequency for hourly data is 24
 ```
 
 
 
-```{r}
-varma_model <- VARMA(training_data[1:4], p = 1, q = 1, include.mean = T)
-```
+
+
+
+
+
 
