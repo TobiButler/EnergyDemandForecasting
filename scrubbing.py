@@ -1,6 +1,10 @@
 """
 Created by: Tobias Butler
-Last Modified: 02/14/2024
+Last Modified: 02/22/2024
+Description: This Python module contains functionality to clean and process a preliminary dataset containing energy 
+    demand, weather, and economic related data obtained from the EIA, NOAA, and BLS. Running it as a script requires 
+    an approporiately named csv file in the local working directory and will produce a new dataset and optional 
+    visuals saved to the local working directory.
 """
 
 import pandas as pd
@@ -16,9 +20,34 @@ import sys
 import os
 
 
-# run all data cleaning functions
+"""
+The main function to run all data cleaning and processing functions within this module. It also has an optional 
+    argument to produce exploratory data analysis visualizations.
+"""
 def main(preliminary_dataset:pd.DataFrame=None, path_to_prelim_dataset:str=None, produce_plots:bool=True, 
-    reduced_variables:bool=False):
+    reduced_variables:bool=False, **kwargs):
+    """
+    Parameters:
+    ----------
+    preliminary_dataset (pandas.DataFrame): a raw dataset containing energy demand, weather, and economic 
+        data gathered from the EIA, NOAA, and BLS.
+
+    path_to_prelim_dataset (str): a path to a csv file containing the dataset described above.
+
+    produce_plots (bool): Determines whether EDA plots are produced and saved in the local directory.
+
+    reduced_variables (bool): Determines whethere to use include all variables while processing the data or a subset 
+        of the variables that are correlated with the dependent variable and less correlated with other predictor variables.
+
+    Returns:
+    ----------
+    pandas.DataFrame: a clean dataset with reduced outliers and no missing values. This dataset is well-suited for exploratory 
+        data analysis and predictive modeling with a model that is able to capture trend and seasonal patterns (TBATS, Holtz-Winters, 
+        Prophet, LSTM, N-BEATS, etc.)
+
+    pandas.DataFrame: Also a clean dataset but with all trend and seasonal components removed from each variable. This dataset is suited 
+        for predictive modeling by a autoregressive model that does not capture trend or seasonal patterns (ARIMA, VAR, etc.)
+    """
     # get path to preliminary dataset if not provided
     if preliminary_dataset is None:
         if path_to_prelim_dataset is None:
@@ -55,15 +84,35 @@ def main(preliminary_dataset:pd.DataFrame=None, path_to_prelim_dataset:str=None,
         scatterplots(clean_training_data=clean_training_data)
 
     # produce time series decomposition plots
-    time_series_decompositions(clean_training_data=clean_training_data, save_residuals=True,
+    residual_components = time_series_decompositions(clean_training_data=clean_training_data, save_residuals=True,
         produce_plots=produce_plots)
 
+    return clean_training_data, residual_components
 
 
-
-# function to split dataset into training and holdout test datasets
+"""
+This function takes a preliminary dataset and applies a 90-10 split to separate it into training and holdout 
+    evaluation data. The training dataset is returned while the holdout dataset is saved to a local directory 
+    for future use.
+"""
 def split_preliminary_dataset(prelim_dataset:pd.DataFrame=None, path_to_preliminary_dataset:str=None, 
     path_to_holdout_dataset:str=None):
+    """
+    Parameters:
+    ----------
+    preliminary_dataset (pandas.DataFrame): a raw dataset containing energy demand, weather, and economic 
+        data gathered from the EIA, NOAA, and BLS.
+
+    path_to_prelim_dataset (str): a path to a csv file containing the dataset described above.
+
+    path_to_holdout_dataset (str): the path where the 10% holdout data will be saved as a csv file.
+
+    Returns:
+    ----------
+    pandas.DataFrame: the 90% training data ready for exploratory data analysis or predictive modeling.
+    """
+
+    # if dataset not provided, load from local directory
     if prelim_dataset is None:
         if path_to_preliminary_dataset is None: path_to_preliminary_dataset = r"Datasets/preliminary.csv"
         prelim_dataset = pd.read_csv(path_to_preliminary_dataset, index_col=0)
@@ -82,9 +131,20 @@ def split_preliminary_dataset(prelim_dataset:pd.DataFrame=None, path_to_prelimin
     return training_data
 
 
-# function to create time series plot for all variables in dataset
+"""
+This function takes a training dataset and creates a series of time series plots which it saves 
+    for future use. By default, these plots are saved in the local directory.
+"""
 def raw_time_series_plots(prelim_training_data:pd.DataFrame=None, path_to_plots:str=None):
-    # load dataset if not provided
+    """
+    Parameters:
+    ----------
+    prelim_training_data (pandas.DataFrame): a training dataset returned by split_preliminary_dataset()
+
+    path_to_plots (str): Determines where to save the created time series plots. By default, 
+        they are saved in the local directory.
+    """
+    # load dataset if not provided, call function to obtain
     if prelim_training_data is None: prelim_training_data = split_preliminary_dataset()
     
     # loop through variables and produce time series plot for each
@@ -103,12 +163,16 @@ def raw_time_series_plots(prelim_training_data:pd.DataFrame=None, path_to_plots:
             template='plotly_dark'  # Use a dark theme
         )
 
-        variable = variable.replace(r"/", "-")
+        # save plotly figure as pickled file
+        variable = variable.replace(r"/", "-") # change variable name for file path
         with open(r"{}/{}.pkl".format(path_to_plots, variable), 'wb') as file:
             pkl.dump(fig, file=file)
 
 
 # function to identify outliers for all time series variables in dataset
+"""
+
+"""
 def identify_outliers(transformed_training_data:pd.DataFrame=None, path_to_plots:str=None):
     # load dataset if not provided
     if transformed_training_data is None: transformed_training_data = transform_variables()
@@ -165,12 +229,16 @@ def transform_variables(prelim_training_data:pd.DataFrame=None, **kwargs):
 
 # function to fill missing values using univariate Prophet forecasting models
 def impute_missing_values(outliers_removed_data:pd.DataFrame=None, path_to_clean_dataset:str=None, 
-    path_to_prophet_models:str=None, use_existing_prophet_models:bool=False, **kwargs):
+    path_to_prophet_models:str=None, tune_prophet_models:bool=False, **kwargs):
+
+    # if dataset not provided, call function to obtain
     if outliers_removed_data is None: outliers_removed_data = identify_outliers(**kwargs)
+
+    #
     interpolations = {}
     clean_data = outliers_removed_data.copy()
 
-    # define path to clean dataset
+    # define path to save clean dataset
     if path_to_clean_dataset is None: path_to_clean_dataset = r"Datasets/clean_training.csv"
 
     # define path to directory containing pickled Prophet models
@@ -474,9 +542,39 @@ def detect_outliers(data:pd.Series, n:int=1000, p:float=0.001):
     return outliers
 
 
+# want to be able to call this function to fit all models, save them, and return them. Then use them in whatever this function was called from.
+def fit_prophet_models(outliers_removed_dataset:pd.DataFrame, tune_hyperparameters:bool=False, 
+    path_to_prophet_models:str=None):
+    """
+    Parameters:
+    ----------
+    tune_hyperparameters (bool): Determines whether to perform cross-validation to determine optimal 
+        hyperparameter values for each Prophet model. This adds a significant amount of computation time. 
+        By default, it is False and high regularization hyperparameters are used for every model.
+    """
+    if tune_hyperparameters: pass
+    # fit Prophet model for each numeric variable in the dataset
+    prophet_models = {}
+    time_series_variables = list(outliers_removed_dataset.select_dtypes("number").columns)
+    for variable in time_series_variables:
+        print(f"Interpolating for variable {variable}")
+        df = outliers_removed_dataset[[variable]].reset_index().rename(columns={"index":"ds", variable:"y"})
 
-def fit_prophet_models(outliers_removed_dataset:pd.DataFrame, tune_hyperparameters:bool=False):
-    pass
+        # define prophet model with all seasonality components and high regularization
+        model = Prophet(weekly_seasonality=True, yearly_seasonality=True, daily_seasonality=True, 
+            changepoint_prior_scale=0.001, seasonality_prior_scale=0.01)
+        
+        # fit model
+        model.fit(df)
+
+        # save fit model
+        prophet_models[variable] = model
+        variable = variable.replace(r"/", "-")
+        with open("{}/{}.pkl".format(path_to_prophet_models, variable), "wb") as file:
+            pkl.dump(model, file=file)
+
+        return prophet_models
+
     # grid search hyperparameter tune for prophet models
 
     # save results to "Tuning Results/prophet.pkl"

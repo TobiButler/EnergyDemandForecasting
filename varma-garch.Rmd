@@ -3,6 +3,8 @@ title: "R Notebook"
 output: html_notebook
 ---
 
+This notebook is exploratory for the purposes of fitting a forecasting model
+
 ```{r}
 # library(tidyverse)
 library(tidytable)
@@ -13,12 +15,9 @@ library(vars)
 library(reticulate)
 ```
 
-
-
 ```{r}
 print(getwd())
 ```
-
 
 ```{r}
 training_data = read.csv(r"(Datasets/residuals.csv)", row.names = 1)
@@ -28,15 +27,12 @@ training_data = read.csv(r"(Datasets/residuals.csv)", row.names = 1)
 colnames(training_data)
 ```
 
-
 ```{r}
 head(training_data,5)
 # training_data
 
 # sapply(training_data, class)
 ```
-
-
 
 ```{r}
 dummified_data <- training_data %>% get_dummies(drop_first = TRUE)
@@ -47,12 +43,11 @@ dummified_data = subset(dummified_data, select = !(names(dummified_data) %in% c(
 colnames(dummified_data)
 ```
 
-
 Separate Energy Demand and Temperature. PCA the rest.
+
 ```{r}
 not_pca_vars = c("Energy.Demand..MWH.", "HourlyDryBulbTemperature")
 ```
-
 
 ```{r}
 not_pca_data <- dummified_data[, c("Energy.Demand..MWH.", "HourlyDryBulbTemperature")]
@@ -64,7 +59,6 @@ scaled_data <- scale(pca_data)
 ```{r}
 pca_result <- prcomp(scaled_data)
 ```
-
 
 ```{r}
 # # Principal components
@@ -96,10 +90,8 @@ endogenous_data <- cbind(not_pca_data, orthogonal_data)[,1:5]
 endogenous_data
 ```
 
-
-
 ```{r}
-var_model <- vars::VAR(test, p=10, type="const")
+var_model <- vars::VAR(endogenous_data, p=10, type="const")
 
 ```
 
@@ -118,9 +110,12 @@ plot(predictions[,"fcst"])
 
 Fit Prophet Models for squared errors based on residuals from VAR model
 
+```{python}
+
+```
+
 
 Fit VAR Model for squared errors based on residuals from Prophet models above
-
 
 Final model will need to be composed of all point forecasting Prophet models, point forecasting VAR model, single error forecasting Prophet model, and the error forecasting VAR model.
 
@@ -128,13 +123,12 @@ Final model will need to be composed of all point forecasting Prophet models, po
 
 ```
 
-
 ```{r}
 dim(endogenous_data)[2]
 ```
 
-
 Now fit the GARCH model
+
 ```{r}
 library(rmgarch)
 library(parallel)
@@ -156,7 +150,6 @@ c <- cov(test)
 det(c)
 ```
 
-
 ```{r}
 cl = makePSOCKcluster(2)
 multf = multifit(uspec, test, cluster = cl)
@@ -177,40 +170,22 @@ garch_predictions <- dccforecast(fit=fit1, n.ahead = 1)
 plot(sigma(garch_predictions)[,1,1])
 ```
 
-
-
 ```{r}
 predictions <- VARpred(var_model, h=10, output = FALSE)
 ```
-
 
 ```{r}
 predictions
 plot(predictions)
 ```
 
-
-
-
-
-
 ```{r}
 times <- training_data %>% rownames()
 print(times)
 ```
 
-
-
 Fit multivariate GARCH model
+
 ```{r}
 time_series_object <- ts(training_data, start = c(2022, 1), frequency = 24)  # Frequency for hourly data is 24
 ```
-
-
-
-
-
-
-
-
-
