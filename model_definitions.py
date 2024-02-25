@@ -18,6 +18,13 @@ from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
 import pickle as pkl
 
+# prevent logging when fitting Prophet models
+import logging
+logger = logging.getLogger('cmdstanpy')
+logger.addHandler(logging.NullHandler())
+logger.propagate = False
+logger.setLevel(logging.CRITICAL)
+
 
 """
 A class representing a probabilistic forecasting model. It fits basic statistical models for 
@@ -42,18 +49,23 @@ class Forecaster():
     """
     
     """
-    def fit_from_clean(clean_dataset:pd.DataFrame=None, path_to_clean_dataset:pd.DataFrame=None):
+    def fit_from_clean(clean_dataset:pd.DataFrame=None, path_to_clean_dataset:pd.DataFrame=None, 
+        hyperparameters:dict=dict(changepoint_prior_scale=0.001, seasonality_prior_scale=0.01, 
+            point_var_lags=10, minimum_error_prediction=None, error_trend=1e-4
+        ), **kwargs):
         """
         Parameters:
         ----------
 
         """
-        pass
+        # fit Prophet models then call fit_from_residuals
+
 
     """
     
     """
-    def fit_from_residuals(self, dependent_variable:str, point_prophet_model:Prophet=None, residuals:pd.DataFrame=None, path_to_residuals:str=None, path_to_prophet_models:str=None, strong_predictors:list=None):
+    def fit_from_residuals(self, dependent_variable:str, point_prophet_model:Prophet=None, residuals:pd.DataFrame=None, 
+        path_to_residuals:str=None, path_to_prophet_models:str=None, strong_predictors:list=None, **kwargs):
         """
         
         dependent_variable (str):  ex: "Energy Demand (MWH)"
@@ -221,4 +233,13 @@ class Forecaster():
 
     # provide new dataset for observations that have occurred since the model was fit. Does not refit the model.
     def update_model():
+        pass
+
+
+    def cross_validate():
+        pass
+
+
+    # want to split this into sections to avoid repeating all parts everytime if not necessary...
+    def tune_hyperparameters(tune_point_forecaster:bool, tune_error_forecaster:bool):
         pass
