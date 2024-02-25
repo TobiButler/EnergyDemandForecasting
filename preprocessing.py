@@ -48,6 +48,8 @@ def main(preliminary_dataset:pd.DataFrame=None, path_to_prelim_dataset:str=None,
     pandas.DataFrame: Also a clean dataset but with all trend and seasonal components removed from each variable. This dataset is suited 
         for predictive modeling by a autoregressive model that does not capture trend or seasonal patterns (ARIMA, VAR, etc.)
     """
+    # create directories for saving figures and models
+    
     # get path to preliminary dataset if not provided
     if preliminary_dataset is None:
         if path_to_prelim_dataset is None:
@@ -171,10 +173,22 @@ def raw_time_series_plots(prelim_training_data:pd.DataFrame=None, path_to_plots:
 
 # function to identify outliers for all time series variables in dataset
 """
-
+This function takes a dataset with any potential data transformations already made. It applies 
+    univariate moving average estimation to each time series variable in the dataset provided. 
+    The method is described by Blázquez-García, et al. (2022) in A Review on Outlier/Anomaly 
+    Detection in Time Series Data. ACM Computing Surveys, 54(3), 1–33. 
 """
 def identify_outliers(transformed_training_data:pd.DataFrame=None, path_to_plots:str=None):
-    # load dataset if not provided
+    """
+    Parameters:
+    ----------
+    tranformed_training_data (pandas.DataFrame): a dataset with transformations (binning, 
+        probability transforms, etc.) already applied
+
+    path_to_plots (str): a path to a directory to save plotly figures showing outliers as pickled 
+        files for future use.
+    """
+    # load dataset if not provided, call function to obtain
     if transformed_training_data is None: transformed_training_data = transform_variables()
     
     # Plot the time series with outliers marked
@@ -211,31 +225,71 @@ def identify_outliers(transformed_training_data:pd.DataFrame=None, path_to_plots
     return outliers_removed_data # preliminary dataset that has outliers replaced with NAN
 
 
-# transform variables where appropriate
+"""
+This function takes a raw training dataset and applies the following transformations:
+    - HourlyPrecipitation is binned to produce a categorical variable
+"""
 def transform_variables(prelim_training_data:pd.DataFrame=None, **kwargs):
+    """
+    Parameters:
+    ----------
+    prelim_training_data (pandas.DataFrame): a raw training dataset that has been obtained after 
+        splitting the original dataset into 90-10 training-holdout datasets.
+
+    Returns:
+    ----------
+    pandas.DataFrame: a dataset with all variable transformations applied
+    """
+    # if dataset not provided, call function to obtain
     if prelim_training_data is None: prelim_training_data = split_preliminary_dataset(**kwargs)
-    # don't want to apply outlier detection to HourlyPrecipitation since it behaves more like a binary variable than a normally distributed one.
 
-    # Define bin edges and labels
-    bins = [-float('inf'), 0.0001, 0.05, 0.33, float('inf')]
-    labels = ['None', 'Light Rain', 'Medium Rain', 'Heavy Rain']
+    # try to transform variables, ignoring an error if those variables are not present in the dataset
+    try:
+        # transform HourlyPrecipitation to categorical by binning
+        # Define bin edges and labels
+        bins = [-float('inf'), 0.0001, 0.05, 0.33, float('inf')]
+        labels = ['None', 'Light Rain', 'Medium Rain', 'Heavy Rain']
 
-    # Bin the 'values' column
-    transformed_training_data = prelim_training_data.copy() # don't overwrite dataset
-    transformed_training_data.loc[:, "HourlyPrecipitation"] = pd.cut(transformed_training_data['HourlyPrecipitation'], bins=bins, labels=labels)
+        # Apply binning
+        transformed_training_data = prelim_training_data.copy() # don't overwrite dataset
+        transformed_training_data.loc[:, "HourlyPrecipitation"] = pd.cut(transformed_training_data['HourlyPrecipitation'], 
+            bins=bins, labels=labels)
+        
+    except KeyError: pass
 
     return transformed_training_data
 
 
+"""
+This function takes a dataset that has already had outliers replaced with missing values. It fits Prophet 
+    forecasting models to each time series variable and uses interpolation to fill any missing values. 
+    Missing values in categorical variables are replaced with their most common value for simplicity.
+"""
 # function to fill missing values using univariate Prophet forecasting models
 def impute_missing_values(outliers_removed_data:pd.DataFrame=None, path_to_clean_dataset:str=None, 
     path_to_prophet_models:str=None, tune_prophet_models:bool=False, **kwargs):
+    """
+    Parameters:
+    ----------
+    outliers_removed_data (pandas.DataFrame): a dataset with outliers removed (replaced with NAN)
+
+    path_to_clean_dataset (str): a path where the clean dataset (with missing values imputed) will be saved
+
+    path_to_prophet_models (str): a path to a folder where the fit Prophet models will be saved for later use
+
+    tune_prophet_models (bool): Determines whether the Prophet models are fit using grid-search hyperparameter 
+        tuning and cross-validation. This greatly increases the amount of time it takes to fit each model. By default, 
+        this is False and each Prophet model is given high regularization hyperparameters to avoid overfitting.
+
+    Returns:
+    ----------
+    pandas.DataFrame: a clean dataset with no missing values.
+    """
 
     # if dataset not provided, call function to obtain
     if outliers_removed_data is None: outliers_removed_data = identify_outliers(**kwargs)
 
     #
-    interpolations = {}
     clean_data = outliers_removed_data.copy()
 
     # define path to save clean dataset
@@ -259,7 +313,6 @@ def impute_missing_values(outliers_removed_data:pd.DataFrame=None, path_to_clean
 
         # calculate interpolations
         interpolated_values = model.predict(df)
-        interpolations[variable] = interpolated_values
         to_impute = outliers_removed_data[variable].isna().values
         clean_data.loc[to_impute, variable] = interpolated_values["yhat"][to_impute].values
 
@@ -279,6 +332,13 @@ def impute_missing_values(outliers_removed_data:pd.DataFrame=None, path_to_clean
 
 
 def distribution_plots(clean_training_data:pd.DataFrame=None, path_to_plots:str=None, **kwargs):
+    """
+    Parameters:
+    ----------
+
+    Returns:
+    ----------
+    """
     if clean_training_data is None: 
         try: clean_training_data = pd.read_csv(r"Datasets/clean_training.csv", index_col=0)
         except: clean_training_data = impute_missing_values(**kwargs)
@@ -325,6 +385,13 @@ def distribution_plots(clean_training_data:pd.DataFrame=None, path_to_plots:str=
 
 # function to produce static scatterplots between Energy Demand and each other variable
 def scatterplots(clean_training_data:pd.DataFrame=None, path_to_plots:str=None, **kwargs):
+    """
+    Parameters:
+    ----------
+
+    Returns:
+    ----------
+    """
     if clean_training_data is None: 
         try: clean_training_data = pd.read_csv(r"Datasets/clean_training.csv", index_col=0)
         except: clean_training_data = impute_missing_values(**kwargs)
@@ -392,6 +459,13 @@ def scatterplots(clean_training_data:pd.DataFrame=None, path_to_plots:str=None, 
 def time_series_decompositions(clean_training_data:pd.DataFrame=None, path_to_prophet_models:str=None, 
     path_to_plots:str=None, save_residuals:bool=True, path_to_residual_dataset:str=None, produce_plots:bool=True, 
     **kwargs):
+    """
+    Parameters:
+    ----------
+
+    Returns:
+    ----------
+    """
 
     # get clean training dataset if not provided
     if clean_training_data is None: 
@@ -489,6 +563,13 @@ def time_series_decompositions(clean_training_data:pd.DataFrame=None, path_to_pr
 # obtain time series residuals from decompositions
 def calculate_residuals(clean_training_data:pd.DataFrame=None, path_to_clean_dataset:str=None, 
     path_to_prophet_models:str=None, path_to_residual_dataset:str=None, save_residuals:bool=True, **kwargs):
+    """
+    Parameters:
+    ----------
+
+    Returns:
+    ----------
+    """
 
     # get clean training dataset if not provided
     if clean_training_data is None:
