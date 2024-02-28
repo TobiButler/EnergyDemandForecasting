@@ -28,7 +28,7 @@ logger.setLevel(logging.CRITICAL)
 
 
 class PreprocessingPipeline():
-    def __init__(self, saved_directory_name, produce_eda_plots:bool=True) -> None:
+    def __init__(self, saved_directory_name:str="Saved", produce_eda_plots:bool=True) -> None:
         """
         Parameters:
         ----------
@@ -41,15 +41,35 @@ class PreprocessingPipeline():
         self.produce_eda_plots = produce_eda_plots
         self.eda_error = "This ProcessingPipeline has not been instantiated to produce eda plots. You must set \"produce_eda_plots\" to True."
 
-        # establish saved directory structure
+        # Create file system for saving datasets and figures
+
+        # Define subdirectories
+        subdirectories = {
+            'Datasets': [],
+            'Models': ['Prophet'],
+            'Plotly Figures': ['Raw Time Series', 'Outlier Detection'],
+            'Static Visuals':['Distributions', 'Scatterplots', 'Decompositions']
+        }
+
+        # Create the main directory if it doesn't exist
+        if not os.path.exists(self.saved_directory):
+            os.makedirs(self.saved_directory)
+
+        # Create subdirectories
+        for subdir, subsubdirs in subdirectories.items():
+            subdir_path = os.path.join(self.saved_directory, subdir)
+            if not os.path.exists(subdir_path): os.makedirs(subdir_path)
+            for subsubdir in subsubdirs:
+                subsubdir_path = os.path.join(subdir_path, subsubdir)
+                if not os.path.exists(subsubdir_path): os.makedirs(subsubdir_path)
+
 
 
     """
     A method to run all data cleaning and processing functions of the class. It also has an optional 
         argument to produce exploratory data analysis visualizations.
     """
-    def process_dataset(self, preliminary_dataset:pd.DataFrame=None, path_to_prelim_dataset:str=None, 
-    reduced_variables:bool=False, **kwargs) -> pd.DataFrame:
+    def process_dataset(self, preliminary_dataset:pd.DataFrame=None, path_to_prelim_dataset:str=None, **kwargs) -> pd.DataFrame:
         """
         Parameters:
         ----------
@@ -57,9 +77,6 @@ class PreprocessingPipeline():
             data gathered from the EIA, NOAA, and BLS.
 
         path_to_prelim_dataset (str): a path to a csv file containing the dataset described above.
-
-        reduced_variables (bool): Determines whethere to use include all variables while processing the data or a subset 
-            of the variables that are correlated with the dependent variable and less correlated with other predictor variables.
 
         Returns:
         ----------
@@ -75,14 +92,9 @@ class PreprocessingPipeline():
         # get path to preliminary dataset if not provided
         if preliminary_dataset is None:
             if path_to_prelim_dataset is None:
-                preliminary_dataset = pd.read_csv(r"Datasets/preliminary.csv")
+                preliminary_dataset = pd.read_csv(r"{}/Datasets/preliminary.csv".format(self.saved_directory))
             else:
                 preliminary_dataset = pd.read_csv(path_to_prelim_dataset)
-
-        if reduced_variables:
-            preliminary_dataset = preliminary_dataset[["Energy Demand (MWH)", "HourlyDryBulbTemperature", 
-                "HourlyPrecipitation", "HourlyWindSpeed", "Energy Price (Cents/KWH)", "Civilian Noninstitutional Population", 
-                "CPI-U"]]
         
         # split dataset into training and holdout evaluation sets
         training_data = self.split_preliminary_dataset(prelim_dataset=preliminary_dataset)
@@ -92,7 +104,7 @@ class PreprocessingPipeline():
             self.raw_time_series_plots(prelim_training_data=training_data)
 
         # convert numerical variables to ordinal categorical where appropriate (ex: Hourly Precipitation)
-        transformed_training_data = self.transform_variables(prelim_training_data=preliminary_dataset)
+        transformed_training_data = self.transform_variables(prelim_training_data=training_data)
 
         # identify outliers and produce plots
         outliers_removed = self.identify_outliers(transformed_training_data=transformed_training_data)
@@ -136,7 +148,7 @@ class PreprocessingPipeline():
 
         # if dataset not provided, load from local directory
         if prelim_dataset is None:
-            if path_to_preliminary_dataset is None: path_to_preliminary_dataset = r"Datasets/preliminary.csv"
+            if path_to_preliminary_dataset is None: path_to_preliminary_dataset = r"{}/Datasets/preliminary.csv".format(self.saved_directory)
             prelim_dataset = pd.read_csv(path_to_preliminary_dataset, index_col=0)
 
         # use last 10% of data for final evaluation
@@ -147,7 +159,7 @@ class PreprocessingPipeline():
         training_data = prelim_dataset[~prelim_dataset.index.isin(holdout_test_data.index)]
 
         # save energy demand from holdout test dataset for later use 
-        if path_to_holdout_dataset is None: path_to_holdout_dataset = r"Datasets/holdout.csv"
+        if path_to_holdout_dataset is None: path_to_holdout_dataset = r"{}/Datasets/holdout.csv".format(self.saved_directory)
         holdout_test_data.to_csv(path_to_holdout_dataset)
 
         return training_data
@@ -173,7 +185,7 @@ class PreprocessingPipeline():
         if prelim_training_data is None: prelim_training_data = self.split_preliminary_dataset()
         
         # loop through variables and produce time series plot for each
-        if path_to_plots is None: path_to_plots = r"Plotly Figures/Raw Time Series"
+        if path_to_plots is None: path_to_plots = r"{}/Plotly Figures/Raw Time Series".format(self.saved_directory)
         for variable in prelim_training_data:
             fig = go.Figure()
 
@@ -238,7 +250,7 @@ class PreprocessingPipeline():
             )
 
             # define directory to store plots if not provided
-            if path_to_plots is None: path_to_plots = r"Plotly Figures/Outlier Detection"
+            if path_to_plots is None: path_to_plots = r"{}/Plotly Figures/Outlier Detection".format(self.saved_directory)
 
             # save plotly figure
             variable = variable.replace(r"/", "-")
@@ -290,7 +302,7 @@ class PreprocessingPipeline():
     """
     # function to fill missing values using univariate Prophet forecasting models
     def impute_missing_values(self, outliers_removed_data:pd.DataFrame=None, path_to_clean_dataset:str=None, 
-        path_to_prophet_models:str=None, tune_prophet_models:bool=False, **kwargs):
+        path_to_prophet_models:str=None, **kwargs):
         """
         Parameters:
         ----------
@@ -299,10 +311,6 @@ class PreprocessingPipeline():
         path_to_clean_dataset (str): a path where the clean dataset (with missing values imputed) will be saved
 
         path_to_prophet_models (str): a path to a folder where the fit Prophet models will be saved for later use
-
-        tune_prophet_models (bool): Determines whether the Prophet models are fit using grid-search hyperparameter 
-            tuning and cross-validation. This greatly increases the amount of time it takes to fit each model. By default, 
-            this is False and each Prophet model is given high regularization hyperparameters to avoid overfitting.
 
         Returns:
         ----------
@@ -316,10 +324,10 @@ class PreprocessingPipeline():
         clean_data = outliers_removed_data.copy()
 
         # define path to save clean dataset
-        if path_to_clean_dataset is None: path_to_clean_dataset = r"Datasets/clean_training.csv"
+        if path_to_clean_dataset is None: path_to_clean_dataset = r"{}/Datasets/clean_training.csv".format(self.saved_directory)
 
         # define path to directory containing pickled Prophet models
-        if path_to_prophet_models is None: path_to_prophet_models = r"Models/Prophet"
+        if path_to_prophet_models is None: path_to_prophet_models = r"{}/Models/Prophet".format(self.saved_directory)
 
         # fit a Prophet model for each time-series variable
         time_series_variables = list(outliers_removed_data.select_dtypes("number").columns)
@@ -376,12 +384,12 @@ class PreprocessingPipeline():
 
         # if dataset not provided, try loading from local directory
         if clean_training_data is None: 
-            if path_to_clean_dataset is None: path_to_clean_dataset = r"Saved/Datasets/clean_training.csv"
+            if path_to_clean_dataset is None: path_to_clean_dataset = r"{}/Datasets/clean_training.csv".format(self.saved_directory)
             clean_training_data = pd.read_csv(clean_training_data, index_col=0)
         else: clean_training_data = clean_training_data.copy() # avoid overwriting
 
         # define where to save the distribution plots
-        if path_to_plots is None: path_to_plots = r"Saved/Static Visuals/Distributions"
+        if path_to_plots is None: path_to_plots = r"{}/Static Visuals/Distributions".format(self.saved_directory)
 
         # create distribution plots for continuous variables
         for variable in clean_training_data.select_dtypes("number").columns:
@@ -441,12 +449,12 @@ class PreprocessingPipeline():
 
         # if dataset not provided, load from local directory
         if clean_training_data is None: 
-            if path_to_clean_dataset is None: path_to_clean_dataset = r"Saved/Datasets/clean_training.csv"
+            if path_to_clean_dataset is None: path_to_clean_dataset = r"{}/Datasets/clean_training.csv".format(self.saved_directory)
             clean_training_data = pd.read_csv(path_to_clean_dataset, index_col=0)
         else: clean_training_data = clean_training_data.copy() # avoid overwriting
 
         # define where to save the scatterplots
-        if path_to_plots is None: path_to_plots = r"Saved/Static Visuals/Scatterplots"
+        if path_to_plots is None: path_to_plots = r"{}/Static Visuals/Scatterplots".format(self.saved_directory)
 
         # create scatterplots for continuous predictors
         dependent_variable = "Energy Demand (MWH)"
@@ -529,15 +537,15 @@ class PreprocessingPipeline():
 
         # get clean training dataset if not provided
         if clean_training_data is None: 
-            try: clean_training_data = pd.read_csv(r"Datasets/clean_training.csv", index_col=0)
+            try: clean_training_data = pd.read_csv(r"{}/Datasets/clean_training.csv".format(self.saved_directory), index_col=0)
             except: clean_training_data = self.impute_missing_values(**kwargs)
         else: clean_training_data = clean_training_data.copy() # avoid overwriting
 
         # get path to plots if not provided
-        if path_to_plots is None: path_to_plots = r"Saved/Static Visuals/Decompositions"
+        if path_to_plots is None: path_to_plots = r"{}/Static Visuals/Decompositions".format(self.saved_directory)
 
         # get path to prophet models if not provided
-        if path_to_prophet_models is None: path_to_prophet_models = r"Saved/Models/Prophet"
+        if path_to_prophet_models is None: path_to_prophet_models = r"{}/Models/Prophet".format(self.saved_directory)
 
         # loop through each variable, producing time series decomposition and optionally saving residuals
         for variable in clean_training_data.select_dtypes("number").columns:
@@ -614,7 +622,7 @@ class PreprocessingPipeline():
                 plt.close()
         
         if save_residuals:
-            if path_to_residual_dataset is None: path_to_residual_dataset = r"Datasets/residuals.csv"
+            if path_to_residual_dataset is None: path_to_residual_dataset = r"{}/Datasets/residuals.csv".format(self.saved_directory)
             clean_training_data.to_csv(path_to_residual_dataset)
 
         return clean_training_data # really the residuals
@@ -633,7 +641,7 @@ class PreprocessingPipeline():
 
         # get clean training dataset if not provided
         if clean_training_data is None:
-            if path_to_clean_dataset is None: clean_training_data = pd.read_csv(r"Datasets/clean_training.csv")
+            if path_to_clean_dataset is None: clean_training_data = pd.read_csv(r"{}/Datasets/clean_training.csv".format(self.saved_directory))
             else: clean_training_data = pd.read_csv(path_to_clean_dataset)
 
         # get residuals from time series decompositions without making plots
@@ -720,38 +728,38 @@ def detect_outliers(data:pd.Series, n:int=1000, p:float=0.001):
     return outliers
 
 
-# want to be able to call this function to fit all models, save them, and return them. Then use them in whatever this function was called from.
-def fit_prophet_models(outliers_removed_dataset:pd.DataFrame, tune_hyperparameters:bool=False, 
-    path_to_prophet_models:str=None):
-    """
-    Parameters:
-    ----------
-    tune_hyperparameters (bool): Determines whether to perform cross-validation to determine optimal 
-        hyperparameter values for each Prophet model. This adds a significant amount of computation time. 
-        By default, it is False and high regularization hyperparameters are used for every model.
-    """
-    if tune_hyperparameters: pass
-    # fit Prophet model for each numeric variable in the dataset
-    prophet_models = {}
-    time_series_variables = list(outliers_removed_dataset.select_dtypes("number").columns)
-    for variable in time_series_variables:
-        print(f"Interpolating for variable {variable}")
-        df = outliers_removed_dataset[[variable]].reset_index().rename(columns={"index":"ds", variable:"y"})
+# # want to be able to call this function to fit all models, save them, and return them. Then use them in whatever this function was called from.
+# def fit_prophet_models(outliers_removed_dataset:pd.DataFrame, tune_hyperparameters:bool=False, 
+#     path_to_prophet_models:str=None):
+#     """
+#     Parameters:
+#     ----------
+#     tune_hyperparameters (bool): Determines whether to perform cross-validation to determine optimal 
+#         hyperparameter values for each Prophet model. This adds a significant amount of computation time. 
+#         By default, it is False and high regularization hyperparameters are used for every model.
+#     """
+#     if tune_hyperparameters: pass
+#     # fit Prophet model for each numeric variable in the dataset
+#     prophet_models = {}
+#     time_series_variables = list(outliers_removed_dataset.select_dtypes("number").columns)
+#     for variable in time_series_variables:
+#         print(f"Interpolating for variable {variable}")
+#         df = outliers_removed_dataset[[variable]].reset_index().rename(columns={"index":"ds", variable:"y"})
 
-        # define prophet model with all seasonality components and high regularization
-        model = Prophet(weekly_seasonality=True, yearly_seasonality=True, daily_seasonality=True, 
-            changepoint_prior_scale=0.001, seasonality_prior_scale=0.01)
+#         # define prophet model with all seasonality components and high regularization
+#         model = Prophet(weekly_seasonality=True, yearly_seasonality=True, daily_seasonality=True, 
+#             changepoint_prior_scale=0.001, seasonality_prior_scale=0.01)
         
-        # fit model
-        model.fit(df)
+#         # fit model
+#         model.fit(df)
 
-        # save fit model
-        prophet_models[variable] = model
-        variable = variable.replace(r"/", "-")
-        with open("{}/{}.pkl".format(path_to_prophet_models, variable), "wb") as file:
-            pkl.dump(model, file=file)
+#         # save fit model
+#         prophet_models[variable] = model
+#         variable = variable.replace(r"/", "-")
+#         with open("{}/{}.pkl".format(path_to_prophet_models, variable), "wb") as file:
+#             pkl.dump(model, file=file)
 
-        return prophet_models
+#         return prophet_models
 
     # grid search hyperparameter tune for prophet models
 
