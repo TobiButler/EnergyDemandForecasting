@@ -28,7 +28,7 @@ logger.setLevel(logging.CRITICAL)
 
 
 class PreprocessingPipeline():
-    def __init__(self, saved_directory_name:str="Saved", produce_eda_plots:bool=True) -> None:
+    def __init__(self, saved_directory_name:str="Saved", save_datasets:bool=True, produce_eda_plots:bool=True) -> None:
         """
         Parameters:
         ----------
@@ -39,6 +39,7 @@ class PreprocessingPipeline():
         """
         self.saved_directory = saved_directory_name
         self.produce_eda_plots = produce_eda_plots
+        self.save_datasets = save_datasets
         self.eda_error = "This ProcessingPipeline has not been instantiated to produce eda plots. You must set \"produce_eda_plots\" to True."
 
         # Create file system for saving datasets and figures
@@ -69,7 +70,7 @@ class PreprocessingPipeline():
     A method to run all data cleaning and processing functions of the class. It also has an optional 
         argument to produce exploratory data analysis visualizations.
     """
-    def process_dataset(self, preliminary_dataset:pd.DataFrame=None, path_to_prelim_dataset:str=None, **kwargs) -> pd.DataFrame:
+    def process_dataset(self, preliminary_dataset:pd.DataFrame=None, path_to_prelim_dataset:str=None, split_into_train_holdout:bool=False, **kwargs) -> pd.DataFrame:
         """
         Parameters:
         ----------
@@ -96,8 +97,11 @@ class PreprocessingPipeline():
             else:
                 preliminary_dataset = pd.read_csv(path_to_prelim_dataset)
         
-        # split dataset into training and holdout evaluation sets
-        training_data = self.split_preliminary_dataset(prelim_dataset=preliminary_dataset)
+        if split_into_train_holdout:
+            # split dataset into training and holdout evaluation sets
+            training_data, holdout_test_data = self.split_preliminary_dataset(prelim_dataset=preliminary_dataset)
+        else: # process all data
+            training_data = preliminary_dataset.copy()
 
         if self.produce_eda_plots:
             # produce raw time series plots
@@ -129,8 +133,7 @@ class PreprocessingPipeline():
         evaluation data. The training dataset is returned while the holdout dataset is saved to a local directory 
         for future use.
     """
-    def split_preliminary_dataset(self, prelim_dataset:pd.DataFrame=None, path_to_preliminary_dataset:str=None, 
-        path_to_holdout_dataset:str=None):
+    def split_preliminary_dataset(self, prelim_dataset:pd.DataFrame=None, path_to_preliminary_dataset:str=None, path_to_holdout_dataset:str=None):
         """
         Parameters:
         ----------
@@ -159,17 +162,18 @@ class PreprocessingPipeline():
         training_data = prelim_dataset[~prelim_dataset.index.isin(holdout_test_data.index)]
 
         # save energy demand from holdout test dataset for later use 
-        if path_to_holdout_dataset is None: path_to_holdout_dataset = r"{}/Datasets/holdout.csv".format(self.saved_directory)
-        holdout_test_data.to_csv(path_to_holdout_dataset)
+        if self.save_datasets:
+            if path_to_holdout_dataset is None: path_to_holdout_dataset = r"{}/Datasets/holdout.csv".format(self.saved_directory)
+            holdout_test_data.to_csv(path_to_holdout_dataset)
 
-        return training_data
+        return training_data, holdout_test_data
 
 
     """
     This function takes a training dataset and creates a series of time series plots which it saves 
         for future use. By default, these plots are saved in the local directory.
     """
-    def raw_time_series_plots(self, prelim_training_data:pd.DataFrame=None, path_to_plots:str=None):
+    def raw_time_series_plots(self, prelim_training_data:pd.DataFrame, path_to_plots:str=None):
         """
         Parameters:
         ----------
@@ -180,9 +184,6 @@ class PreprocessingPipeline():
         """
         # make sure plots are supposed to be produced
         if not self.produce_eda_plots: raise AttributeError(self.eda_error)
-
-        # load dataset if not provided, call function to obtain
-        if prelim_training_data is None: prelim_training_data = self.split_preliminary_dataset()
         
         # loop through variables and produce time series plot for each
         if path_to_plots is None: path_to_plots = r"{}/Plotly Figures/Raw Time Series".format(self.saved_directory)
@@ -252,10 +253,11 @@ class PreprocessingPipeline():
             # define directory to store plots if not provided
             if path_to_plots is None: path_to_plots = r"{}/Plotly Figures/Outlier Detection".format(self.saved_directory)
 
-            # save plotly figure
-            variable = variable.replace(r"/", "-")
-            with open(r"{}/{}.pkl".format(path_to_plots, variable), 'wb') as file:
-                pkl.dump(fig, file=file)
+            if self.produce_eda_plots:
+                # save plotly figure
+                variable = variable.replace(r"/", "-")
+                with open(r"{}/{}.pkl".format(path_to_plots, variable), 'wb') as file:
+                    pkl.dump(fig, file=file)
 
         return outliers_removed_data # preliminary dataset that has outliers replaced with NAN
 
@@ -264,7 +266,7 @@ class PreprocessingPipeline():
     This function takes a raw training dataset and applies the following transformations:
         - HourlyPrecipitation is binned to produce a categorical variable
     """
-    def transform_variables(self, prelim_training_data:pd.DataFrame=None, **kwargs):
+    def transform_variables(self, prelim_training_data:pd.DataFrame, **kwargs):
         """
         Parameters:
         ----------
@@ -275,9 +277,6 @@ class PreprocessingPipeline():
         ----------
         pandas.DataFrame: a dataset with all variable transformations applied
         """
-        # if dataset not provided, call function to obtain
-        if prelim_training_data is None: prelim_training_data = self.split_preliminary_dataset(**kwargs)
-
         # try to transform variables, ignoring an error if those variables are not present in the dataset
         try:
             # transform HourlyPrecipitation to categorical by binning
@@ -348,9 +347,9 @@ class PreprocessingPipeline():
             clean_data.loc[to_impute, variable] = interpolated_values["yhat"][to_impute].values
 
             # save fit model
-            variable = variable.replace(r"/", "-")
-            with open("{}/{}.pkl".format(path_to_prophet_models, variable), "wb") as file:
-                pkl.dump(model, file=file)
+            # variable = variable.replace(r"/", "-")
+            # with open("{}/{}.pkl".format(path_to_prophet_models, variable), "wb") as file:
+            #     pkl.dump(model, file=file)
         
         for variable in [x for x in outliers_removed_data.columns if x not in time_series_variables]:
             print(f"Interpolating for variable {variable}")
@@ -358,7 +357,8 @@ class PreprocessingPipeline():
             clean_data.loc[to_impute, variable] = clean_data[variable].mode()
 
         # save clean dataset
-        clean_data.to_csv(path_to_clean_dataset)
+        if self.save_datasets:
+            clean_data.to_csv(path_to_clean_dataset)
         return clean_data
 
 
@@ -464,9 +464,12 @@ class PreprocessingPipeline():
                 correlations = clean_training_data.select_dtypes("number").corr()
                 fig = plt.figure(figsize=(30,30))
                 ax = fig.add_subplot()
-                sns.heatmap(correlations, annot=True, fmt=".2f", annot_kws={"fontsize":14})
-                plt.fontsize=20
-                plt.title("Correlations Between Variables", size=20)
+                sns.heatmap(correlations, annot=True, fmt=".2f", annot_kws={"fontsize":24})
+                ax.set_title("Correlations Between {} and Predictors".format("Energy Demand (MWH)"), size=28)
+                ax.set_yticklabels(ax.get_yticklabels(), size = 20)
+                ax.set_xticklabels(ax.get_xticklabels(), size = 20)
+                plt.yticks(rotation=0) 
+                plt.xticks(rotation=90) 
 
                 # Save the plot as a PNG image with 300 pixels per inch (ppi)
                 variable = variable.replace(r"/", "-")
@@ -560,7 +563,7 @@ class PreprocessingPipeline():
 
             if save_residuals: clean_training_data.loc[:,variable] = forecasts["residual"].values
 
-            if produce_plots:
+            if produce_plots and self.produce_eda_plots:
                 # define figure
                 fig = plt.figure(figsize=(8,15))
 
@@ -621,7 +624,7 @@ class PreprocessingPipeline():
                 fig.savefig(r'{}/{}.png'.format(path_to_plots, variable), dpi=300)
                 plt.close()
         
-        if save_residuals:
+        if save_residuals and self.save_datasets:
             if path_to_residual_dataset is None: path_to_residual_dataset = r"{}/Datasets/residuals.csv".format(self.saved_directory)
             clean_training_data.to_csv(path_to_residual_dataset)
 

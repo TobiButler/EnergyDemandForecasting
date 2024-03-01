@@ -436,3 +436,8 @@ class Forecaster():
     # provide new dataset for observations that have occurred since the model was fit. Does not refit the model.
     def update_model(self,):
         pass
+
+
+    # create plotly figure that displays forecasts over the next n hours ahead
+    def plot_future(self, n_hours_ahead:int):
+        pass

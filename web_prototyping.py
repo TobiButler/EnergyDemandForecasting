@@ -10,9 +10,10 @@ import os
 import pickle as pkl
 import io
 
-# Resize images to this width (and height)
+# Define global variables
 IMAGE_WIDTH = 750
-
+saved_directory = r"Saved"
+dependent_variable = r"Energy Demand (MWH)"
 
 # Create Dash app
 app = dash.Dash(__name__, suppress_callback_exceptions=True)
@@ -23,6 +24,29 @@ app = dash.Dash(__name__, suppress_callback_exceptions=True)
 navigation_button_ids = dict(zip(["homepage", "page1", "page2", "page3"], ["lp", "p1", "p2", "3"]))
 landing_page_layout = html.Div([
     html.H1('Energy Demand Forecasting Application'),
+    html.Div(
+        """This small web application is designed to provide an interactive way of understanding how data collected from the U.S. Energy Information Agency (EIA), 
+        the U.S. National Oceanic Atmospheric Agency (NOAA), and the U.S. Bureau of Labor Statistics (BLS), was analyzed and used to develop and Energy Demand 
+        Forecasting Pipeline. """
+    ),
+    html.Br(),
+    html.Div("""This page provides a user guide for navigating the application and using the other pages. Feel free to leave this page and head to one of the 
+             others using the buttons at the bottom at any time."""),
+    html.Br(),
+    html.Div( # include user guide here
+        [
+        html.H2("User Guide"),
+        html.Br(),
+        html.H4("Page 1: Exploratory Data Analysis"),
+        html.Div("""Describe it"""),
+        html.Br(),
+        html.H4("Page 2: Fitting the Forecasting Model"),
+        html.Div(),
+        html.Br(),
+        html.H4("Page 3: The Final Product"),
+        html.Div(),
+        ]
+    ),
     html.Div(style={'width': '100%', 'display': 'flex', 'justify-content': 'space-between'}, children=[
         html.Button('Reset Home Page', id=navigation_button_ids['homepage'], n_clicks=0, style={'width': '25%'}),
         html.Button('Page 1', id=navigation_button_ids['page1'], n_clicks=0, style={'width': '25%'}),
@@ -34,13 +58,14 @@ landing_page_layout = html.Div([
 # HERE want to add dropdown for each type of plot. Only offer the relevant variables for each type of plot 
 # (ex: only show outliers plotted for variables that have outliers.)
 
+
 # Specify the directory path for raw-time-series plots
-rts_directory = r"Plotly Figures/Raw Time Series" 
+rts_directory = r"{}/Plotly Figures/Raw Time Series".format(saved_directory)
 variables = [x[:-4] for x in os.listdir(rts_directory)] # Get a list of associated variables
 rts_dropdown_options = [{"label":variable, "value":variable} for variable in variables]
 
 # specify the directory path for outlier identification plots
-outlier_directory = r"Plotly Figures/Outlier Detection"
+outlier_directory = r"{}/Plotly Figures/Outlier Detection".format(saved_directory)
 variables = [x[:-4] for x in os.listdir(outlier_directory)] # Get a list of associated variables
 outlier_dropdown_options = [{"label":variable, "value":variable} for variable in variables]
 
@@ -50,12 +75,12 @@ outlier_dropdown_options = [{"label":variable, "value":variable} for variable in
 # distribution_dropdown_options = [{"label":variable, "value":variable} for variable in variables]
 
 # specify the directory path for scatterplots
-scatterplot_directory = r"Static Visuals/Scatterplots"
+scatterplot_directory = r"{}/Static Visuals/Scatterplots".format(saved_directory)
 variables = [x[:-4] for x in os.listdir(scatterplot_directory)] # Get a list of associated variables
 scatterplot_dropdown_options = [{"label":variable, "value":variable} for variable in variables]
 
 # specify the directory path for scatterplots
-decomposition_directory = r"Static Visuals/Decompositions"
+decomposition_directory = r"{}/Static Visuals/Decompositions".format(saved_directory)
 variables = [x[:-4] for x in os.listdir(decomposition_directory)] # Get a list of associated variables
 decomposition_dropdown_options = [{"label":variable, "value":variable} for variable in variables]
 
@@ -70,7 +95,7 @@ page1_layout = html.Div([
             dcc.Dropdown(
                 id='rts-dropdown',
                 options=rts_dropdown_options,
-                value="Energy Demand (MWH)"  # Default value
+                value=dependent_variable  # Default value
             ),
             html.Div("Raw Time Series Plot"),
             html.Div([], id='raw-time-series'),
@@ -78,7 +103,7 @@ page1_layout = html.Div([
             dcc.Dropdown(
                 id='outliers-dropdown',
                 options=outlier_dropdown_options,
-                value="Energy Demand (MWH)"  # Default value
+                value=dependent_variable  # Default value
             ),
             html.Div("Time Series Plot with Outliers Identified"),
             html.Div([], id='outliers'),
@@ -86,7 +111,7 @@ page1_layout = html.Div([
             dcc.Dropdown(
                 id='scatterplots-dropdown',
                 options=scatterplot_dropdown_options,
-                value="Energy Demand (MWH)"  # Default value
+                value=dependent_variable  # Default value
             ),
             html.Img(id='distribution'),
             html.Br(),
@@ -97,7 +122,7 @@ page1_layout = html.Div([
             dcc.Dropdown(
                 id='decompositions-dropdown',
                 options=decomposition_dropdown_options,
-                value="Energy Demand (MWH)"  # Default value
+                value=dependent_variable  # Default value
             ),
             html.Img(id='decomposition'),
         ])
@@ -175,17 +200,17 @@ def page_navigation(*buttons):
         return ""
 
 ### Define Callbacks for Page 1 ###
-@app.callback([Output('raw-time-series', 'children')], [Input('rts-dropdown', 'value')])
+@app.callback(Output('raw-time-series', 'children'), [Input('rts-dropdown', 'value')])
 def update_rts(variable):
     # update raw time series plot
-    path = r"Plotly Figures/Raw Time Series/{}.pkl".format(variable)
+    path = r"{}/Plotly Figures/Raw Time Series/{}.pkl".format(saved_directory, variable)
     raw_time_series_figure = load_plotly_figure(path)
     return raw_time_series_figure
 
-@app.callback([Output('outliers', 'children')], [Input('outliers-dropdown', 'value')])
+@app.callback(Output('outliers', 'children'), [Input('outliers-dropdown', 'value')])
 def update_outliers_fig(variable):
     # update outliers plot
-    path = r"Plotly Figures/Outlier Detection/{}.pkl".format(variable)
+    path = r"{}/Plotly Figures/Outlier Detection/{}.pkl".format(saved_directory, variable)
     outliers_figure = load_plotly_figure(path)
     return outliers_figure
 
@@ -194,20 +219,19 @@ def update_outliers_fig(variable):
 )
 def update_distribution_scatterplot(variable):
     # update scatterplot
-    path = r"Static Visuals/Scatterplots/{}.png".format(variable)
+    path = r"{}/Static Visuals/Scatterplots/{}.png".format(saved_directory, variable)
     scatterplot_image = load_static_image(path=path)
     
     # update distribution plot
-    path = r"Static Visuals/Distributions/{}.png".format(variable)
+    path = r"{}/Static Visuals/Distributions/{}.png".format(saved_directory, variable)
     distribution_image = load_static_image(path=path)
 
     return distribution_image, scatterplot_image
 
-@app.callback([Output('decomposition', 'src')], [Input('decomposition-dropdown', 'value')])
+@app.callback(Output('decomposition', 'src'), [Input('decompositions-dropdown', 'value')])
 def update_decomposition_plot(variable):
     # update time-series decomposition
-    path = r"Static Visuals/Decompositions/{}.png".format(variable)
-    print(path)
+    path = r"{}/Static Visuals/Decompositions/{}.png".format(saved_directory, variable)
     decomposition_image = load_static_image(path=path)
     return decomposition_image
 
@@ -323,7 +347,7 @@ def load_plotly_figure(path):
         figure=figure
     )
 
-    return [graph]
+    return graph
 
 
 def load_static_image(path):
