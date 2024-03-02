@@ -281,15 +281,15 @@ class Forecaster():
 
         Returns:
         ----------
-        numpy.ndarray: Predicted point forecasts
+        pandas.Series: Predicted point forecasts (float) with time as index (datetime64[ns])
 
-        numpy.ndarray: Predicted variance for each point forecast
+        pandas.Series: Predicted variance (float) for each point forecast with time as index (datetime64[ns])
         """
         # predict with point forecasting prophet model
         if self.point_prophet_model is not None:
             df = self.point_prophet_model.make_future_dataframe(periods=hours_ahead+1, freq="H")
-            point_prophet_forecasts = self.point_prophet_model.predict(df)[["ds", "yhat"]]
-            point_prophet_forecasts = point_prophet_forecasts["yhat"].values[-hours_ahead:]
+            point_prophet_forecasts = self.point_prophet_model.predict(df)[["ds", "yhat"]].set_index("ds")
+            point_prophet_forecasts = point_prophet_forecasts["yhat"].iloc[-hours_ahead:]
         else:
             raise AttributeError("The model must be fit before predictions can be made.")
 
@@ -300,8 +300,8 @@ class Forecaster():
         # predict with squared error forecasting Prophet model
         if self.error_prophet_model is not None:
             df = self.error_prophet_model.make_future_dataframe(periods=hours_ahead+1, freq="H")
-            error_prophet_forecasts = self.error_prophet_model.predict(df)[["ds", "yhat"]]
-            error_prophet_forecasts = error_prophet_forecasts["yhat"].values[-hours_ahead:]
+            error_prophet_forecasts = self.error_prophet_model.predict(df)[["ds", "yhat"]].set_index("ds")
+            error_prophet_forecasts = error_prophet_forecasts["yhat"].iloc[-hours_ahead:]
             error_forecasts = error_prophet_forecasts
 
         # predict with squared error forecasting VAR model

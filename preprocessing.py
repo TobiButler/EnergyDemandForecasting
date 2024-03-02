@@ -535,9 +535,6 @@ class PreprocessingPipeline():
         Returns:
         ----------
         """
-        # make sure plots are supposed to be produced
-        if not self.produce_eda_plots: raise AttributeError(self.eda_error)
-
         # get clean training dataset if not provided
         if clean_training_data is None: 
             try: clean_training_data = pd.read_csv(r"{}/Datasets/clean_training.csv".format(self.saved_directory), index_col=0)
