@@ -136,14 +136,33 @@ page1_layout = html.Div([
     ])
 ])
 
+
+# load evaluation plot
+with open(r"{}/Plotly Figures/Forecasting/best_model_cross_validation.pkl".format(saved_directory), 'rb') as file:
+    figure = pkl.load(file)
+evaluation_plot = dcc.Graph(figure=figure)
+
+# load model performance report details
+
 # Define page 2 default layout
 page2_layout = html.Div([
-    html.H1('Page 2'),
-    html.Div([
-        dcc.Graph(id='page2-graph1'),
-        dcc.Graph(id='page2-graph2'),
-        dcc.Graph(id='page2-graph3')
-    ]),
+    html.H1('Page 2: Cross Validation and Final Evaluation'),
+    html.H3("Hyperparameter Tuning (under development)"),
+    html.Div(["""The forecasting model for this pipeline was tuned using grid-search hyperparameter tuning and 5-Folds 
+              rolling cross validation. Details about this process will be provided in the next update."""]),
+    html.Div([], id="cross-validation-plot"),
+    html.Br(),
+    html.H3("Final Model Evaluation"),
+    html.Div([r"""Once an optimal set of hyperparameters were obtained for the underlying forecasting model, its predictive 
+              performance was evaluated on a holdout dataset containing the most recent 10% of Energy Demand Observations. 
+              The time series plot below presents the forecasting model's predictions over this holdout time period along with 
+              the actual observed values for comparison."""]),
+    html.Div([evaluation_plot], id="final-evaluation-plot"),
+    html.Br(),
+    html.Div([r"""The following report describes the performance of the model compared to a baseline moving average using multiple metrics. 
+              In future updates, forecasts from the EIA will be included for additional comparison."""]),
+    html.Div([], id="final-evaluation-results"),
+    html.Br(),
     html.Div(style={'width': '100%', 'display': 'flex', 'justify-content': 'space-between'}, children=[
         html.Button('Home Page', id=navigation_button_ids['homepage'], n_clicks=0, style={'width': '25%'}),
         html.Button('Page 1', id=navigation_button_ids['page1'], n_clicks=0, style={'width': '25%'}),
@@ -154,7 +173,7 @@ page2_layout = html.Div([
 
 
 # load future forecasts plot
-with open(r"Saved/Plotly Figures/Forecasting/future_forecasts.pkl", 'rb') as file:
+with open(r"{}/Plotly Figures/Forecasting/future_forecasts.pkl".format(saved_directory), 'rb') as file:
     figure = pkl.load(file)
 x_range = figure.layout.xaxis.range
 # Generate hourly datetime range using pandas
