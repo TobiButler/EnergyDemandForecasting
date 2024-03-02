@@ -45,7 +45,7 @@ RUN "${HOME}/conda/condabin/conda" config --set ssl_verify "/etc/ssl/certs/Zscal
 
 
 # copy code into the container
-COPY src /app
+COPY src /src
 
 # Make port 8050 available to the world outside this container
 EXPOSE 8050
