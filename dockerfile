@@ -17,7 +17,7 @@ RUN apt-get update && \
 COPY \Configuration \Configuration 
 
 # # update permissions to allow install of conda and mamba
-RUN mv "Configuration/Zscalar_certificate.cer" /usr/local/share/ca-certificates/Zscalar_certificate.crt 
+RUN mv "src/Configuration/Zscalar_certificate.cer" /usr/local/share/ca-certificates/Zscalar_certificate.crt 
 RUN sudo update-ca-certificates
 
 # # install mamba package manager
@@ -45,7 +45,7 @@ RUN "${HOME}/conda/condabin/conda" config --set ssl_verify "/etc/ssl/certs/Zscal
 
 
 # copy code into the container
-COPY . /app
+COPY src /app
 
 # Make port 8050 available to the world outside this container
 EXPOSE 8050
