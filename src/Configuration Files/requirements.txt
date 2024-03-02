@@ -1,9 +1,9 @@
 # This file may be used to create an environment using:
 # $ conda create --name <env> --file <this file>
 # platform: linux-64
-_libgcc_mutex=0.1=conda_forge
-_openmp_mutex=4.5=2_gnu
-_sysroot_linux-64_curr_repodata_hack=3=haa98f57_10
+# _libgcc_mutex=0.1=conda_forge
+# _openmp_mutex=4.5=2_gnu
+# _sysroot_linux-64_curr_repodata_hack=3=haa98f57_10
 dash=2.14.2
 flask=2.2.5
 pandas=2.1.4
