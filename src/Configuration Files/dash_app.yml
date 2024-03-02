@@ -1,0 +1,9 @@
+name: Test
+channels:
+  - nodefaults
+  - conda-forge
+dependencies:
+  - dash=2.14.2
+  - flask=2.2.5
+  - pandas=2.1.4
+  - python=3.11.7

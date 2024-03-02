@@ -1,0 +1,37 @@
+name: Capstone
+channels:
+  - nodefaults
+  - conda-forge
+dependencies:
+  - beautifulsoup4=4.12.2
+  - dash=2.14.2
+  - flask=2.2.5
+  - holidays=0.29
+  - ipykernel=6.29.2
+  - jupyterlab=4.0.11
+  - matplotlib=3.8.0
+  - mysql=5.7.24
+  - nbconvert=7.10.0
+  - nbformat=5.9.2
+  - numpy=1.26.3
+  - openssl=3.2.1
+  - pandas=2.1.4
+  - pillow=10.2.0
+  - pip=23.3.1
+  - plotly=5.9.0
+  - prophet=1.1.4
+  - psutil=5.9.8
+  - pyarrow=14.0.2
+  - pyopenssl=23.2.0
+  - pyro4=4.82
+  - python=3.11.7
+  - pytorch=2.2.0
+  - pyyaml=6.0.1
+  - requests=2.31.0
+  - scikit-learn=1.2.2
+  - seaborn=0.13.2
+  - statsmodels=0.14.0
+  - wheel=0.41.2
+  - yaml=0.2.5
+  - pip:
+      - streamlit==1.31.0
