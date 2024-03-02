@@ -1,14 +1,9 @@
 import dash
 from dash import dcc, html
 from dash.dependencies import Input, Output
-import plotly.graph_objs as go
-import numpy as np
 import pandas as pd
-import base64
-from PIL import Image
 import os
 import pickle as pkl
-import io
 
 # import custom functions
 import dash_app_functions as daf
@@ -368,13 +363,6 @@ def display_page(pathname):
         return page3_layout
     else:
         return landing_page_layout
-    
-
-### Helper Functions ###
-########################
-    
-
-
     
 
 # Run the application when script is run
