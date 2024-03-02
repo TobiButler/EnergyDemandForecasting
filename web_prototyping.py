@@ -10,6 +10,9 @@ import os
 import pickle as pkl
 import io
 
+# import custom functions
+import dash_app_functions as daf
+
 # Define global variables
 IMAGE_WIDTH = 750
 saved_directory = r"Saved"
@@ -54,9 +57,6 @@ landing_page_layout = html.Div([
         html.Button('Page 3', id=navigation_button_ids['page3'], n_clicks=0, style={'width': '25%'}),
     ])
 ])
-
-# HERE want to add dropdown for each type of plot. Only offer the relevant variables for each type of plot 
-# (ex: only show outliers plotted for variables that have outliers.)
 
 
 # Specify the directory path for raw-time-series plots
@@ -136,14 +136,33 @@ page1_layout = html.Div([
     ])
 ])
 
+
+# load evaluation plot
+with open(r"{}/Plotly Figures/Forecasting/best_model_cross_validation.pkl".format(saved_directory), 'rb') as file:
+    figure = pkl.load(file)
+evaluation_plot = dcc.Graph(figure=figure)
+
+# load model performance report details
+
 # Define page 2 default layout
 page2_layout = html.Div([
-    html.H1('Page 2'),
-    html.Div([
-        dcc.Graph(id='page2-graph1'),
-        dcc.Graph(id='page2-graph2'),
-        dcc.Graph(id='page2-graph3')
-    ]),
+    html.H1('Page 2: Cross Validation and Final Evaluation'),
+    html.H3("Hyperparameter Tuning (under development)"),
+    html.Div(["""The forecasting model for this pipeline was tuned using grid-search hyperparameter tuning and 5-Folds 
+              rolling cross validation. Details about this process will be provided in the next update."""]),
+    html.Div([], id="cross-validation-plot"),
+    html.Br(),
+    html.H3("Final Model Evaluation"),
+    html.Div([r"""Once an optimal set of hyperparameters were obtained for the underlying forecasting model, its predictive 
+              performance was evaluated on a holdout dataset containing the most recent 10% of Energy Demand Observations. 
+              The time series plot below presents the forecasting model's predictions over this holdout time period along with 
+              the actual observed values for comparison."""]),
+    html.Div([evaluation_plot], id="final-evaluation-plot"),
+    html.Br(),
+    html.Div([r"""The following report describes the performance of the model compared to a baseline moving average using multiple metrics. 
+              In future updates, forecasts from the EIA will be included for additional comparison."""]),
+    html.Div([], id="final-evaluation-results"),
+    html.Br(),
     html.Div(style={'width': '100%', 'display': 'flex', 'justify-content': 'space-between'}, children=[
         html.Button('Home Page', id=navigation_button_ids['homepage'], n_clicks=0, style={'width': '25%'}),
         html.Button('Page 1', id=navigation_button_ids['page1'], n_clicks=0, style={'width': '25%'}),
@@ -153,20 +172,29 @@ page2_layout = html.Div([
 ])
 
 
+# load future forecasts plot
+with open(r"{}/Plotly Figures/Forecasting/future_forecasts.pkl".format(saved_directory), 'rb') as file:
+    figure = pkl.load(file)
+x_range = figure.layout.xaxis.range
+# Generate hourly datetime range using pandas
+two_year_hourly_range = pd.date_range(start=x_range[0], end=x_range[1], freq='H')
+future_forecasts_plot = dcc.Graph(figure=figure)
+
 # Define Page 3 default layout
 page3_layout = html.Div([
-    html.H1('Page 3'),
-    dcc.Graph(
-        id='time-series-plot',
-        figure=go.Figure(data=[go.Scatter(x=pd.date_range('2022-01-01', periods=100), y=np.random.randn(100), mode='lines')]),
-    ),
+    html.H1('Page 3: Forecasting into the Future'),
+    html.Div("Future Forecasts"),
+    # html.Div([future_forecasts_plot], id='future-forecasts-plot'),
+    html.Div([], id='future-forecasts-plot'),
+    html.Br(),
     dcc.Slider(
         id='future-slider',
-        min=0,
-        max=365,
+        min=1,
+        max=365*2,
         step=1,
-        value=0,
-        marks={i: str(i) for i in range(0, 366, 10)}
+        value=1,
+        # marks = {np.datetime_as_string(i, unit='h'): i for i in hourly_range}
+        marks={i: str(i) for i in range(0, 365*2*24, 100)}
     ),
     html.Div(id='slider-output-container'),
     html.Div(style={'width': '100%', 'display': 'flex', 'justify-content': 'space-between'}, children=[
@@ -204,14 +232,14 @@ def page_navigation(*buttons):
 def update_rts(variable):
     # update raw time series plot
     path = r"{}/Plotly Figures/Raw Time Series/{}.pkl".format(saved_directory, variable)
-    raw_time_series_figure = load_plotly_figure(path)
+    raw_time_series_figure = daf.load_plotly_figure(path)
     return raw_time_series_figure
 
 @app.callback(Output('outliers', 'children'), [Input('outliers-dropdown', 'value')])
 def update_outliers_fig(variable):
     # update outliers plot
     path = r"{}/Plotly Figures/Outlier Detection/{}.pkl".format(saved_directory, variable)
-    outliers_figure = load_plotly_figure(path)
+    outliers_figure = daf.load_plotly_figure(path)
     return outliers_figure
 
 @app.callback(
@@ -220,11 +248,11 @@ def update_outliers_fig(variable):
 def update_distribution_scatterplot(variable):
     # update scatterplot
     path = r"{}/Static Visuals/Scatterplots/{}.png".format(saved_directory, variable)
-    scatterplot_image = load_static_image(path=path)
+    scatterplot_image = daf.load_static_image(path, IMAGE_WIDTH)
     
     # update distribution plot
     path = r"{}/Static Visuals/Distributions/{}.png".format(saved_directory, variable)
-    distribution_image = load_static_image(path=path)
+    distribution_image = daf.load_static_image(path, IMAGE_WIDTH)
 
     return distribution_image, scatterplot_image
 
@@ -232,7 +260,7 @@ def update_distribution_scatterplot(variable):
 def update_decomposition_plot(variable):
     # update time-series decomposition
     path = r"{}/Static Visuals/Decompositions/{}.png".format(saved_directory, variable)
-    decomposition_image = load_static_image(path=path)
+    decomposition_image = daf.load_static_image(path, IMAGE_WIDTH)
     return decomposition_image
 
 # @app.callback(
@@ -300,14 +328,22 @@ app.layout = html.Div([
 
 # Define callbacks to update content dynamically
 @app.callback(
-    Output('time-series-plot', 'figure'),
+    Output('future-forecasts-plot', 'children'),
     [Input('future-slider', 'value')]
 )
 def update_time_series_plot(value):
-    future_date = pd.Timestamp('2022-01-01') + pd.Timedelta(days=value)
-    x_values = pd.date_range(start='2022-01-01', periods=100) + pd.Timedelta(days=value)
-    y_values = np.random.randn(100)
-    return {'data': [go.Scatter(x=x_values, y=y_values, mode='lines')]}
+    with open(r"Saved/Plotly Figures/Forecasting/future_forecasts.pkl", 'rb') as file:
+        figure = pkl.load(file)
+    x_min = two_year_hourly_range[0]
+    x_max = two_year_hourly_range[value*24]
+    figure.update_xaxes(range = [x_min, x_max])
+
+    # Convert the Plotly figure to a Dash graph object
+    graph = dcc.Graph(
+        figure=figure
+    )
+
+    return graph
 
 # Define callback for slider output
 @app.callback(
@@ -338,40 +374,7 @@ def display_page(pathname):
 ########################
     
 
-def load_plotly_figure(path):
-    with open(path, 'rb') as file:
-        figure = pkl.load(file)
 
-    # Convert the Plotly figure to a Dash graph object
-    graph = dcc.Graph(
-        figure=figure
-    )
-
-    return graph
-
-
-def load_static_image(path):
-    # Read the image file
-    with open(path, 'rb') as f:
-        img = Image.open(f)
-        # Resize the image while preserving aspect ratio
-        img.thumbnail((IMAGE_WIDTH, IMAGE_WIDTH))
-        # Convert the image to RGBA if it's not already in that mode
-        img = img.convert('RGBA')
-        # Create a white background image to place the resized image on
-        bg = Image.new('RGBA', (IMAGE_WIDTH, IMAGE_WIDTH), (255, 255, 255, 255))
-        bg.paste(img, (int((IMAGE_WIDTH - img.width) / 2), int((IMAGE_WIDTH - img.height) / 2)), img)
-        # Save the resized and centered image to a temporary file
-        with io.BytesIO() as temp_image_buffer:
-            bg.save(temp_image_buffer, format='PNG')
-            temp_image_buffer.seek(0)
-            # Encode the resized image to base64 format
-            encoded_image = base64.b64encode(temp_image_buffer.read()).decode('utf-8')
-
-    # Create an HTML img element with the encoded image
-    # image_element = html.Img(src='data:image/png;base64,{}'.format(encoded_image))
-
-    return 'data:image/png;base64,{}'.format(encoded_image)
     
 
 # Run the application when script is run
