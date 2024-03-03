@@ -5,6 +5,7 @@ import pandas as pd
 import os
 import pickle as pkl
 import gc
+from datetime import datetime
 
 # import custom functions
 import dash_app_functions as daf
@@ -13,6 +14,8 @@ import dash_app_functions as daf
 IMAGE_WIDTH = 750
 saved_directory = r"Saved"
 dependent_variable = r"Energy Demand (MWH)"
+now = datetime.now()
+now = now.strftime("%Y-%m-%d %H:%M:%S")
 
 # Create Dash app
 app = dash.Dash(__name__, suppress_callback_exceptions=True)
@@ -23,6 +26,7 @@ app = dash.Dash(__name__, suppress_callback_exceptions=True)
 navigation_button_ids = dict(zip(["homepage", "page1", "page2", "page3"], ["lp", "p1", "p2", "3"]))
 landing_page_layout = html.Div([
     html.H1('Residential Energy Demand Forecasting Application'),
+    html.H5("Created by Tobias Butler. Last updated {}".format(now)),
     html.Div(
         """This small web application is designed to provide an interactive way of understanding how data collected from the U.S. Energy Information Agency (EIA), 
         the U.S. National Oceanic Atmospheric Agency (NOAA), and the U.S. Bureau of Labor Statistics (BLS), was analyzed and used to develop a Residential Energy Demand 
