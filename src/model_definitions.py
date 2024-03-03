@@ -287,7 +287,7 @@ class Forecaster():
         """
         # predict with point forecasting prophet model
         if self.point_prophet_model is not None:
-            df = self.point_prophet_model.make_future_dataframe(periods=hours_ahead+1, freq="H")
+            df = self.point_prophet_model.make_future_dataframe(periods=hours_ahead, freq="H")
             point_prophet_forecasts = self.point_prophet_model.predict(df)[["ds", "yhat"]].set_index("ds")
             point_prophet_forecasts = point_prophet_forecasts["yhat"].iloc[-hours_ahead:]
         else:
@@ -299,7 +299,7 @@ class Forecaster():
 
         # predict with squared error forecasting Prophet model
         if self.error_prophet_model is not None:
-            df = self.error_prophet_model.make_future_dataframe(periods=hours_ahead+1, freq="H")
+            df = self.error_prophet_model.make_future_dataframe(periods=hours_ahead, freq="H")
             error_prophet_forecasts = self.error_prophet_model.predict(df)[["ds", "yhat"]].set_index("ds")
             error_prophet_forecasts = error_prophet_forecasts["yhat"].iloc[-hours_ahead:]
             error_forecasts = error_prophet_forecasts

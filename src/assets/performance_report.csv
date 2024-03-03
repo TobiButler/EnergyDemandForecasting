@@ -1,0 +1,4 @@
+,MSE,Weighted MSE,MAE,MAPE
+Forecasting Pipeline,283636.1,243416.34,364.58,0.06
+Baseline Yearly MA,1008851.94,,762.95,0.14
+EIA Forecasts (still to come),,,,

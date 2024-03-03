@@ -1,5 +1,5 @@
 import dash
-from dash import dcc, html
+from dash import dcc, html, dash_table
 from dash.dependencies import Input, Output
 import pandas as pd
 import os
@@ -32,7 +32,7 @@ landing_page_layout = html.Div([
     html.Div("""This page provides a user guide for navigating the application and using the other pages. Feel free to leave this page and head to one of the 
              others using the buttons at the bottom at any time."""),
     html.Br(),
-    html.Div( # include user guide here
+    html.Div( # user guide
         [
         html.H2("User Guide"),
         html.Div("""This web application has been broken into three pages, each of which present information about a different component of the pipeline. The first 
@@ -43,13 +43,22 @@ landing_page_layout = html.Div([
         html.H4("Page 1: Exploratory Data Analysis"),
         html.Div("""The first page of this application presents several exploratory visuals to help understand the behavior of each variable in the pipeline's dataset. 
             To avoid overcrowding the page, each type of visual is only presented for one variable at a time. In order to change which variable is being displayed for 
-            each type of visual, there are dropdown menus that can be used to select from all of relevant variables."""),
+            each type of visual, there are dropdown menus that can be used to select from any of the relevant variables. Use these to explore the behavior of different 
+            variables within the dataset."""),
+        html.Br(),
+        html.H5("Example of Dropdown Menu:"),
+        html.Img(id='example1', style={'width':'75%'}, src=r'assets/example1.png', alt="Image showing example of dropdown menu"),
         html.Br(),
         html.H4("Page 2: Fitting the Forecasting Model"),
-        html.Div(),
+        html.Div("""The second page of the application presents an overview of the model fitting and tuning methods, along with a final performance evaluation and report 
+            (this page is still under development). The report is intended to help users understand the usefulness and/or limitations of the forecasting pipeline before 
+            proceeding to the final page to see it in action. In a future update, users will be able to save the report as an html file."""),
         html.Br(),
         html.H4("Page 3: The Final Product"),
-        html.Div(),
+        html.Div("""The third page of the application presents forecasts from the pipeline up to two years into the future. Users can change the forecasting horizon of the 
+            model by adjusting the slider below the forecasting visualization. In a future update, users will be given an option to download the selected range of forecasts 
+            as a csv file."""),
+        html.Img(id='example3', style={'width':'75%'}, src=r'assets/example3.png', alt="example of slider on page 3"),
         ]
     ),
     html.Div(style={'width': '100%', 'display': 'flex', 'justify-content': 'space-between'}, children=[
@@ -88,12 +97,14 @@ page1_layout = html.Div([
     html.Div([
         html.H3("Describing the Dataset"),
         html.Div("""Historical hourly residential energy demand data in New York City, recorded by the New York 
-            Independent System Operator (ISO), was obtained from the EIA and combined with several weather and 
+            Independent System Operator (NYISO), was obtained from the EIA and combined with several weather and 
             economic related variables. Hourly weather data was recorded by the New York Central Park weather 
             station and was gathered from the NOAA. Monthly economic inidcators for New York City were obtained 
             from the Bureau of Labor Statistics."""),
         html.Br(),
-        html.Div("""The following figure """),
+        html.Div("""The following figure shows a raw plot of the selected time series variable. The start date 
+            is the earliest point at which hourly residential energy demand was available through the NYISO.
+            Other variables can be selected from the dropdown menu to see their raw time series distribution."""),
         html.Div([
             dcc.Dropdown(
                 id='rts-dropdown',
@@ -102,7 +113,11 @@ page1_layout = html.Div([
             ),
             html.Div("Raw Time Series Plot"),
             html.Div([], id='raw-time-series'),
-            html.Br(),
+            html.Br(),html.Br(),html.Br(),
+            html.Div("""For each of the time series variables, outliers were detected using moving average distribution estimation, similar to that described by __.
+                A conservative probability threshold of 0.001 was used alongside an N of 1000 in order to detect observations with extremely low probabilities of 
+                being generated from the same distribution as the nearest 1000 observations. Once identified, outliers were temporarily replaced with missing values 
+                until filled during imputation. In the following figure, these points have been highlighted in red."""),
             dcc.Dropdown(
                 id='outliers-dropdown',
                 options=outlier_dropdown_options,
@@ -110,6 +125,11 @@ page1_layout = html.Div([
             ),
             html.Div("Time Series Plot with Outliers Identified"),
             html.Div([], id='outliers'),
+            html.Br(),html.Br(),html.Br(),html.Br(),
+            html.Div(r"""For all variables in the dataset, distributions were produced to help recognize any ill-conditioned distributions that required transformations, 
+                and scatterplots between them and the dependent variable, Energy Demand (MWH), were produced to help understand the types of relationships 
+                (linear or nonlinear) present in the dataset. These two types of visuals are shown below for the variable selected below. By default, when 
+                "Energy Demand (MWH)" is selected, a heatmap of correlation coefficients between all variables is shown."""),
             html.Br(),
             dcc.Dropdown(
                 id='scatterplots-dropdown',
@@ -119,17 +139,18 @@ page1_layout = html.Div([
             html.Img(id='distribution', style={'width':'50%'}),
             html.Br(),
             html.Img(id='scatterplot', style={'width':'50%'}),
-
-            html.Br(),
-            html.Div("Below are the time series decomposition plots for available time series variables."),
+            html.Br(),html.Br(),html.Br(),html.Br(),
+            html.Div("""Lastly, it is important to understand how each time series variable, especially the dependent variable, is impacted by trend and seasonality components. 
+                Below, time series decomposition plots estimating trend, yearly seasonality, weekly seasonality, and daily seasonality are provided for each time series variable 
+                in the dataset."""),
             dcc.Dropdown(
                 id='decompositions-dropdown',
                 options=decomposition_dropdown_options,
                 value=dependent_variable  # Default value
             ),
             html.Img(id='decomposition', style={'width':'50%'}),
-        ])
-        
+        ]),
+        html.Br()
     ]),
     html.Div(style={'width': '100%', 'display': 'flex', 'justify-content': 'space-between'}, children=[
         html.Button('Home Page', id=navigation_button_ids['homepage'], n_clicks=0, style={'width': '25%'}),
@@ -140,16 +161,10 @@ page1_layout = html.Div([
 ])
 
 
-# load evaluation plot
-# with open(r"{}/Plotly Figures/Forecasting/best_model_cross_validation.pkl".format(saved_directory), 'rb') as file:
-#     figure = pkl.load(file)
-# evaluation_plot = dcc.Graph(figure=figure)
-
-# load model performance report details
 
 # Define page 2 default layout
 page2_layout = html.Div([
-    html.H1('Page 2: Cross Validation and Final Evaluation'),
+    html.H1('Part 2: Cross Validation and Final Evaluation'),
     html.H3("Hyperparameter Tuning (under development)"),
     html.Div(["""The forecasting model for this pipeline was tuned using grid-search hyperparameter tuning and 5-Folds 
               rolling cross validation. Details about this process will be provided in the next update."""]),
@@ -161,10 +176,21 @@ page2_layout = html.Div([
               The time series plot below presents the forecasting model's predictions over this holdout time period along with 
               the actual observed values for comparison."""]),
     html.Div([], id="final-evaluation-plot"),
-    # html.Div([evaluation_plot], id="final-evaluation-plot"),
     html.Br(),
+    html.H5("Performance Reports"),
     html.Div([r"""The following report describes the performance of the model compared to a baseline moving average using multiple metrics. 
-              In future updates, forecasts from the EIA will be included for additional comparison."""]),
+              In future updates, forecasts from the EIA will be included for an additional comparison."""]),
+    html.Br(),
+    html.Div([
+        html.H5("Model Evaluation Results"), 
+        dash_table.DataTable(id="evaluation-table")
+        ], id="final-evaluation-results"),
+    html.Div([
+    html.A('Download Performance Results (csv)', href='assets/performance_report.csv', download='forecasting_evaluation_table.csv')
+    ]),
+    html.Br(), html.Br(),
+    html.Div([r"""Lastly, in future updates, this section will include a report that describes the relative importance of each variable to 
+            the model based on the results of a sensitivity analysis."""]),
     html.Div([], id="final-evaluation-results"),
     html.Br(),
     html.Div(style={'width': '100%', 'display': 'flex', 'justify-content': 'space-between'}, children=[
@@ -176,19 +202,10 @@ page2_layout = html.Div([
 ])
 
 
-# # load future forecasts plot
-# with open(r"{}/Plotly Figures/Forecasting/future_forecasts.pkl".format(saved_directory), 'rb') as file:
-#     figure = pkl.load(file)
-# x_range = figure.layout.xaxis.range
-# # Generate hourly datetime range using pandas
-# two_year_hourly_range = pd.date_range(start=x_range[0], end=x_range[1], freq='H')
-# future_forecasts_plot = dcc.Graph(figure=figure)
-
 # Define Page 3 default layout
 page3_layout = html.Div([
-    html.H1('Page 3: Forecasting into the Future'),
+    html.H1('Part 3: Forecasting into the Future'),
     html.Div("Future Forecasts"),
-    # html.Div([future_forecasts_plot], id='future-forecasts-plot'),
     html.Div([], id='future-forecasts-plot'),
     html.Br(),
     dcc.Slider(
@@ -200,6 +217,7 @@ page3_layout = html.Div([
         marks={i: str(i) for i in range(0, 365*2*24, 100)}
     ),
     html.Div(id='slider-output-container'),
+    html.Br(),
     html.Div(style={'width': '100%', 'display': 'flex', 'justify-content': 'space-between'}, children=[
         html.Button('Home Page', id=navigation_button_ids['homepage'], n_clicks=0, style={'width': '25%'}),
         html.Button('Page 1', id=navigation_button_ids['page1'], n_clicks=0, style={'width': '25%'}),
@@ -295,6 +313,19 @@ def update_final_cv_plot(pathname):
             figure = pkl.load(file)
         evaluation_plot = dcc.Graph(figure=figure)
         return evaluation_plot
+    
+# update table when user navigates to page 2
+@app.callback(
+    [Output('evaluation-table', 'data'),
+     Output('evaluation-table', 'columns')],
+    [Input('url', 'pathname')]
+)
+def update_table(pathname):
+    if pathname == '/page-2':
+        # Read new CSV file or generate new DataFrame
+        eval_df = pd.read_csv('assets/performance_report.csv')
+        columns = [{'name': col, 'id': col} for col in eval_df.columns]
+        return eval_df.to_dict('records'), columns
 
 # callback (model selection) -> page 2 layout
 
@@ -360,6 +391,6 @@ app.layout = html.Div([
 
 # Run the application when script is run
 if __name__ == '__main__':
-    # app.run_server(debug=True, host='0.0.0.0', port=8050) # for testing
+    app.run_server(debug=True, host='0.0.0.0', port=8050) # for testing
     # app.run_server(debug=True, host='localhost', port=8050)
-    app.run(host='0.0.0.0', port=8050) # for render deployment
+    # app.run(host='0.0.0.0', port=8050) # for render deployment
