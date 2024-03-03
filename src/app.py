@@ -360,6 +360,6 @@ app.layout = html.Div([
 
 # Run the application when script is run
 if __name__ == '__main__':
-    app.run_server(debug=True, host='0.0.0.0', port=8050) # for testing
+    # app.run_server(debug=True, host='0.0.0.0', port=8050) # for testing
     # app.run_server(debug=True, host='localhost', port=8050)
-    # app.run(host='0.0.0.0', port=8050) # for render deployment
+    app.run(host='0.0.0.0', port=8050) # for render deployment
