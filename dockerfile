@@ -8,6 +8,9 @@ RUN pip install -r requirements.txt
 COPY src /src
 
 #Running your APP and doing some PORT Forwarding
+EXPOSE 8050
+
+WORKDIR "/src"
 
 ENTRYPOINT ["python3"]
-CMD ["src/app.py"]
+CMD ["app.py"]
