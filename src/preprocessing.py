@@ -18,6 +18,8 @@ import plotly.graph_objects as go
 import pickle as pkl
 import sys
 import os
+import io
+import base64
 
 # prevent logging when fitting Prophet models
 import logging
@@ -25,6 +27,8 @@ logger = logging.getLogger('cmdstanpy')
 logger.addHandler(logging.NullHandler())
 logger.propagate = False
 logger.setLevel(logging.CRITICAL)
+
+png_width = 750
 
 
 class PreprocessingPipeline():
@@ -428,7 +432,8 @@ class PreprocessingPipeline():
             ax.legend()
             # Save the plot as a PNG image with 300 pixels per inch (ppi)
             variable = variable.replace(r"/", "-")
-            fig.savefig(r'{}/{}.png'.format(path_to_plots, variable), dpi=300)
+            # fig.savefig(r'{}/{}.png'.format(path_to_plots, variable), dpi=300)
+            save_png_encoded(r'{}/{}.png'.format(path_to_plots, variable), fig)
             plt.close()
 
         # plot distributions for categorical variables
@@ -442,7 +447,8 @@ class PreprocessingPipeline():
             ax.bar_label(ax.containers[0])
             # Save the plot as a PNG image with 300 pixels per inch (ppi)
             variable = variable.replace(r"/", "-")
-            fig.savefig(r'{}/{}.png'.format(path_to_plots, variable), dpi=300)
+            # fig.savefig(r'{}/{}.png'.format(path_to_plots, variable), dpi=300)
+            save_png_encoded(r'{}/{}.png'.format(path_to_plots, variable), fig)
             plt.close()
 
         
@@ -492,7 +498,8 @@ class PreprocessingPipeline():
 
                 # Save the plot as a PNG image with 300 pixels per inch (ppi)
                 variable = variable.replace(r"/", "-")
-                plt.savefig(r'{}/{}.png'.format(path_to_plots, variable), dpi=300)
+                # plt.savefig(r'{}/{}.png'.format(path_to_plots, variable), dpi=300)
+                save_png_encoded(r'{}/{}.png'.format(path_to_plots, variable), fig)
                 plt.close()
             else:
                 # Calculate the correlation coefficient
@@ -510,7 +517,8 @@ class PreprocessingPipeline():
 
                 # Save the plot as a PNG image with 300 pixels per inch (ppi)
                 variable = variable.replace(r"/", "-")
-                fig.savefig(r'{}/{}.png'.format(path_to_plots, variable), dpi=300)
+                # fig.savefig(r'{}/{}.png'.format(path_to_plots, variable), dpi=300)
+                save_png_encoded(r'{}/{}.png'.format(path_to_plots, variable), fig)
                 plt.close()
 
         # scatter plots for categorical predictors
@@ -530,7 +538,8 @@ class PreprocessingPipeline():
 
             # Save the plot as a PNG image with 300 pixels per inch (ppi)
             variable = variable.replace(r"/", "-")
-            fig.savefig(r'{}/{}.png'.format(path_to_plots, variable), dpi=300)
+            # fig.savefig(r'{}/{}.png'.format(path_to_plots, variable), dpi=300)
+            save_png_encoded(r'{}/{}.png'.format(path_to_plots, variable), fig)
             plt.close()
 
 
@@ -637,7 +646,8 @@ class PreprocessingPipeline():
                 plt.tight_layout()
                 # Save the plot as a PNG image with 300 pixels per inch (ppi)
                 variable = variable.replace(r"/", "-")
-                fig.savefig(r'{}/{}.png'.format(path_to_plots, variable), dpi=300)
+                # fig.savefig(r'{}/{}.png'.format(path_to_plots, variable), dpi=300)
+                save_png_encoded(r'{}/{}.png'.format(path_to_plots, variable), fig)
                 plt.close()
         
         if save_residuals and self.save_datasets:
@@ -745,6 +755,37 @@ def detect_outliers(data:pd.Series, n:int=1000, p:float=0.001):
             outliers[i] = True
 
     return outliers
+
+
+def save_png_encoded(filepath:str, fig:plt.Figure):
+    # Get the original dimensions of the figure
+    original_width, original_height = fig.get_size_inches()
+
+    # Calculate the aspect ratio
+    aspect_ratio = original_height / original_width
+
+    # Set the new width to 750 pixels
+    new_width_inches = png_width / 100  # Convert pixels to inches
+
+    # Calculate the corresponding height
+    new_height_inches = new_width_inches * aspect_ratio
+
+    # Set the new dimensions for the figure
+    fig.set_size_inches(new_width_inches, new_height_inches)
+
+    # Save the figure to a buffer
+    buffer = io.BytesIO()
+    fig.savefig(buffer, format='png', dpi=200)
+    buffer.seek(0)
+
+    # Encode the buffer contents as base64
+    base64_encoded = base64.b64encode(buffer.read()).decode()
+
+    with open(filepath, "wb") as f:
+        f.write(base64.b64decode(base64_encoded))
+
+    # Embed the base64-encoded image in an HTML img tag
+    # html_img = f'<img src="data:image/png;base64,{base64_encoded}">'
 
 
 # # want to be able to call this function to fit all models, save them, and return them. Then use them in whatever this function was called from.

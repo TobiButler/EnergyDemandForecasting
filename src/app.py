@@ -4,6 +4,7 @@ from dash.dependencies import Input, Output
 import pandas as pd
 import os
 import pickle as pkl
+import gc
 
 # import custom functions
 import dash_app_functions as daf
@@ -40,7 +41,9 @@ landing_page_layout = html.Div([
             demand forecasts into the future."""),
         html.Br(),
         html.H4("Page 1: Exploratory Data Analysis"),
-        html.Div("""Describe it"""),
+        html.Div("""The first page of this application presents several exploratory visuals to help understand the behavior of each variable in the pipeline's dataset. 
+            To avoid overcrowding the page, each type of visual is only presented for one variable at a time. In order to change which variable is being displayed for 
+            each type of visual, there are dropdown menus that can be used to select from all of relevant variables."""),
         html.Br(),
         html.H4("Page 2: Fitting the Forecasting Model"),
         html.Div(),
@@ -113,9 +116,9 @@ page1_layout = html.Div([
                 options=scatterplot_dropdown_options,
                 value=dependent_variable  # Default value
             ),
-            html.Img(id='distribution'),
+            html.Img(id='distribution', style={'width':'50%'}),
             html.Br(),
-            html.Img(id='scatterplot'),
+            html.Img(id='scatterplot', style={'width':'50%'}),
 
             html.Br(),
             html.Div("Below are the time series decomposition plots for available time series variables."),
@@ -124,7 +127,7 @@ page1_layout = html.Div([
                 options=decomposition_dropdown_options,
                 value=dependent_variable  # Default value
             ),
-            html.Img(id='decomposition'),
+            html.Img(id='decomposition', style={'width':'50%'}),
         ])
         
     ]),
@@ -194,7 +197,6 @@ page3_layout = html.Div([
         max=365*2,
         step=1,
         value=1,
-        # marks = {np.datetime_as_string(i, unit='h'): i for i in hourly_range}
         marks={i: str(i) for i in range(0, 365*2*24, 100)}
     ),
     html.Div(id='slider-output-container'),
@@ -218,6 +220,7 @@ page3_layout = html.Div([
     ]
 )
 def page_navigation(*buttons):
+    gc.collect()
     ctx = dash.callback_context
     button_id = ctx.triggered_id
     if button_id == navigation_button_ids["page1"]:
@@ -322,7 +325,7 @@ def update_future_forecasts_plot(value):
     with open(r"Saved/Plotly Figures/Forecasting/future_forecasts.pkl", 'rb') as file:
         figure = pkl.load(file)
     x_range = figure.layout.xaxis.range
-    
+
     # Generate hourly datetime range using pandas
     two_year_hourly_range = pd.date_range(start=x_range[0], end=x_range[1], freq='H')
     x_min = two_year_hourly_range[0]
@@ -354,9 +357,6 @@ app.layout = html.Div([
 ])
 
 
-
-
-    
 
 # Run the application when script is run
 if __name__ == '__main__':
