@@ -136,9 +136,9 @@ page1_layout = html.Div([
                 options=scatterplot_dropdown_options,
                 value=dependent_variable  # Default value
             ),
-            html.Img(id='distribution', style={'width':'50%'}),
+            html.Img(id='distribution', style={'width':'750px'}),
             html.Br(),
-            html.Img(id='scatterplot', style={'width':'50%'}),
+            html.Img(id='scatterplot', style={'width':'750px'}),
             html.Br(),html.Br(),html.Br(),html.Br(),
             html.Div("""Lastly, it is important to understand how each time series variable, especially the dependent variable, is impacted by trend and seasonality components. 
                 Below, time series decomposition plots estimating trend, yearly seasonality, weekly seasonality, and daily seasonality are provided for each time series variable 
@@ -148,7 +148,7 @@ page1_layout = html.Div([
                 options=decomposition_dropdown_options,
                 value=dependent_variable  # Default value
             ),
-            html.Img(id='decomposition', style={'width':'50%'}),
+            html.Img(id='decomposition', style={'width':'750px'}),
         ]),
         html.Br()
     ]),
@@ -181,17 +181,14 @@ page2_layout = html.Div([
     html.Div([r"""The following report describes the performance of the model compared to a baseline moving average using multiple metrics. 
               In future updates, forecasts from the EIA will be included for an additional comparison."""]),
     html.Br(),
-    html.Div([
-        html.H5("Model Evaluation Results"), 
-        dash_table.DataTable(id="evaluation-table")
-        ], id="final-evaluation-results"),
+    html.Div(children=[], id="final-evaluation-results"),
     html.Div([
     html.A('Download Performance Results (csv)', href='assets/performance_report.csv', download='forecasting_evaluation_table.csv')
     ]),
     html.Br(), html.Br(),
     html.Div([r"""Lastly, in future updates, this section will include a report that describes the relative importance of each variable to 
             the model based on the results of a sensitivity analysis."""]),
-    html.Div([], id="final-evaluation-results"),
+    html.Div([], id="final-model-results"),
     html.Br(),
     html.Div(style={'width': '100%', 'display': 'flex', 'justify-content': 'space-between'}, children=[
         html.Button('Home Page', id=navigation_button_ids['homepage'], n_clicks=0, style={'width': '25%'}),
@@ -315,17 +312,16 @@ def update_final_cv_plot(pathname):
         return evaluation_plot
     
 # update table when user navigates to page 2
-@app.callback(
-    [Output('evaluation-table', 'data'),
-     Output('evaluation-table', 'columns')],
-    [Input('url', 'pathname')]
-)
+@app.callback(Output('final-evaluation-results', 'children'), [Input('url', 'pathname')])
 def update_table(pathname):
     if pathname == '/page-2':
         # Read new CSV file or generate new DataFrame
         eval_df = pd.read_csv('assets/performance_report.csv')
         columns = [{'name': col, 'id': col} for col in eval_df.columns]
-        return eval_df.to_dict('records'), columns
+        table = dash_table.DataTable(id="evaluation-table", data=eval_df.to_dict('records'), columns=columns)
+        return [html.H5("Model Evaluation Results"), table]
+        
+
 
 # callback (model selection) -> page 2 layout
 
