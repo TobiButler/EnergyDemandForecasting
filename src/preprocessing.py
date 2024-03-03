@@ -45,7 +45,7 @@ class PreprocessingPipeline():
         # Create file system for saving datasets and figures
 
         # Define subdirectories
-        subdirectories = {
+        self.subdirectories = {
             'Datasets': [],
             'Models': ['Prophet'],
             'Plotly Figures': ['Raw Time Series', 'Outlier Detection'],
@@ -57,7 +57,7 @@ class PreprocessingPipeline():
             os.makedirs(self.saved_directory)
 
         # Create subdirectories
-        for subdir, subsubdirs in subdirectories.items():
+        for subdir, subsubdirs in self.subdirectories.items():
             subdir_path = os.path.join(self.saved_directory, subdir)
             if not os.path.exists(subdir_path): os.makedirs(subdir_path)
             for subsubdir in subsubdirs:
@@ -88,7 +88,26 @@ class PreprocessingPipeline():
         pandas.DataFrame: Also a clean dataset but with all trend and seasonal components removed from each variable. This dataset is suited 
             for predictive modeling by a autoregressive model that does not capture trend or seasonal patterns (ARIMA, VAR, etc.)
         """
-        # create directories for saving figures and models
+        # if producing eda plots, delete current contents of directories
+        if self.produce_eda_plots:
+            for subdir, subsubdirs in self.subdirectories.items():
+                subdir_path = os.path.join(self.saved_directory, subdir)
+                for subsubdir in subsubdirs:
+                    subsubdir_path = os.path.join(subdir_path, subsubdir)
+                    files = os.listdir(subsubdir_path)
+                    for file in files:
+                        file_path = os.path.join(subsubdir_path, file)
+                        try:
+                            os.remove(file_path)
+                        except Exception as e:
+                            print(f"Error deleting {file_path}: {e}")
+
+        # Create the main directory if it doesn't exist
+        if not os.path.exists(self.saved_directory):
+            os.makedirs(self.saved_directory)
+
+        # Create subdirectories
+        
         
         # get path to preliminary dataset if not provided
         if preliminary_dataset is None:
@@ -347,9 +366,9 @@ class PreprocessingPipeline():
             clean_data.loc[to_impute, variable] = interpolated_values["yhat"][to_impute].values
 
             # save fit model
-            # variable = variable.replace(r"/", "-")
-            # with open("{}/{}.pkl".format(path_to_prophet_models, variable), "wb") as file:
-            #     pkl.dump(model, file=file)
+            variable = variable.replace(r"/", "-")
+            with open("{}/{}.pkl".format(path_to_prophet_models, variable), "wb") as file:
+                pkl.dump(model, file=file)
         
         for variable in [x for x in outliers_removed_data.columns if x not in time_series_variables]:
             print(f"Interpolating for variable {variable}")
