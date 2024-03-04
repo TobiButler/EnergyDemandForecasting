@@ -1,3 +1,9 @@
+"""
+Author: Tobias Butler
+Last Modified: 03/04/2024
+Description: This Python module contains a Dash application
+"""
+
 import dash
 from dash import dcc, html, dash_table
 from dash.dependencies import Input, Output

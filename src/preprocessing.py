@@ -3,7 +3,7 @@ Created by: Tobias Butler
 Last Modified: 02/22/2024
 Description: This Python module contains functionality to clean and process a preliminary dataset containing energy 
     demand, weather, and economic related data obtained from the EIA, NOAA, and BLS. Running it as a script requires 
-    an approporiately named csv file in the local working directory and will produce a new dataset and optional 
+    an appropriately named csv file in the local working directory and will produce a new dataset and optional 
     visuals saved to the local working directory.
 """
 

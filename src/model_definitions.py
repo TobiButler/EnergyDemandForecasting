@@ -1,7 +1,7 @@
 """
 Author: Tobias Butler
 Last Modified: 02/27/2024
-Description: This module contains a Forecaster class and the associated methods to fit a probablisitic 
+Description: This module contains a Forecaster class and the associated methods to fit a probabilistic 
     forecasting model and use it to make predictions. It also contains some hyperparameter tuning functionality.
 
 Still to do: 
@@ -33,25 +33,22 @@ A class representing a probabilistic forecasting model. It fits basic statistica
     both point forecasts and their squared errors.
 """
 class Forecaster():
-    def __init__(self, path_to_saved_files:str="Saved") -> None:
+    def __init__(self) -> None:
         """
         Parameters:
         ------------
-        path_to_saved_files (str): a path to a directory that contains datasets, figures, and models 
-            for this project.
         """
         self.point_prophet_model = None
         self.point_var_model = None
         self.error_prophet_model = None
         self.error_var_model = None
         self.error_trend = None
-        self.path_to_saved_files = path_to_saved_files
 
 
 
     """
     This method fits the forecasting model. It requires a clean dataset, a string dependent variable, and takes 
-        a dictionary of optional hyperparameters
+        a dictionary of optional hyperparameters.
     """
     def fit(self, clean_training_data:pd.DataFrame, dependent_variable:str, strong_predictors:list=[], 
             hyperparameters:dict=dict(changepoint_prior_scale=0.001, seasonality_prior_scale=0.01, 
@@ -79,9 +76,9 @@ class Forecaster():
 
 
     """
-    This method fits univariate Prophet models to all variables in the dataset provided and returns the residual components
+    This is a private method that fits univariate Prophet models to all variables in the dataset provided and returns the residual components
     """
-    def fit_prophet_models(self, clean_training_data:pd.DataFrame, dependent_variable:str, changepoint_prior_scale:float=0.001, 
+    def _fit_prophet_models(self, clean_training_data:pd.DataFrame, dependent_variable:str, changepoint_prior_scale:float=0.001, 
         seasonality_prior_scale:float=0.01, **kwargs):
         """
         Parameters:
@@ -129,10 +126,10 @@ class Forecaster():
             return residuals
 
     """
-    This function fits a vector autoregressive (VAR) model to the residuals of the point forecasting Prophet 
+    This is a private method that fits a vector autoregressive (VAR) model to the residuals of the point forecasting Prophet 
         models.
     """
-    def fit_point_var(self, dependent_variable:str, residuals:pd.DataFrame, strong_predictors:list[str]=[]):
+    def _fit_point_var(self, dependent_variable:str, residuals:pd.DataFrame, strong_predictors:list[str]=[]):
         """
         Parameters:
         ----------
@@ -198,9 +195,9 @@ class Forecaster():
     
 
     """
-    This method fits the error (or variance) forecasting component of the model
+    This is a private method that fits the error (or variance) forecasting component of the model
     """
-    def fit_error_forecaster(self, dependent_variable:str, squared_errors:pd.DataFrame, 
+    def _fit_error_forecaster(self, dependent_variable:str, squared_errors:pd.DataFrame, 
         minimum_error_prediction:float=None, error_trend:float=1e-3, use_var_model:bool=True, **kwargs):
         """
         Parameters:
@@ -271,7 +268,8 @@ class Forecaster():
         
 
     """
-    This method makes probabilistic forecasts into the future. The model is required to be fit first.
+    This method makes probabilistic forecasts into the future. The model is required to be fit first. It returns 
+        both a series of point forecasts and a series of variance forecasts.
     """
     def predict(self, hours_ahead:int):
         """
@@ -319,7 +317,7 @@ class Forecaster():
 
 
     """
-    This method takes data and a set of hyperparamters and conducts rolling cross-validation using MSE and weighted MSE metrics
+    This method takes data and a set of hyperparameters and conducts rolling cross-validation using MSE and weighted MSE metrics.
     """
     def cross_validate(self, num_folds:int, clean_training_data:pd.DataFrame, dependent_variable:str, hyperparameters:dict,
         strong_predictors:list[str]=[], return_predictions:bool=False):
@@ -395,7 +393,7 @@ class Forecaster():
 
 
     """
-    This method takes a list of hyperparameter sets and evaluates each using cross-validation
+    This method takes a list of hyperparameter sets and evaluates each using cross-validation.
     """
     def tune_hyperparameters(self, clean_training_data:pd.DataFrame, dependent_variable:str, 
         hyperparameter_sets:list[dict], num_cv_folds:int=5, strong_predictors:list[str]=[]):

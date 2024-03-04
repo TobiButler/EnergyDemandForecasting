@@ -1,5 +1,12 @@
 # created by Tobias Butler 
-# Last Modified: 02/13/2024
+# Last Modified: 03/01/2024
+"""
+Description: This module contains functionality to gather hourly residential energy demand data local to New York City 
+    from the U.S. Energy Information Agency (EIA), hourly weather-related data local to Central Park weather station from 
+    the U.S. National Oceanic and Atmospheric Agency (NOAA), monthly energy price data local to New York State from the EIA, 
+    and monthly economic indices local to New York City from the U.S. Bureau of Labor Statistics (BLS), and combine them all 
+    into a single dataset with an hourly timescale.
+"""
 
 # import third party libraries
 import pandas as pd
