@@ -489,12 +489,15 @@ class PreprocessingPipeline():
                 correlations = clean_training_data.select_dtypes("number").corr()
                 fig = plt.figure(figsize=(30,30))
                 ax = fig.add_subplot()
-                sns.heatmap(correlations, annot=True, fmt=".2f", annot_kws={"fontsize":24})
-                ax.set_title("Correlations Between {} and Predictors".format("Energy Demand (MWH)"), size=28)
-                ax.set_yticklabels(ax.get_yticklabels(), size = 20)
-                ax.set_xticklabels(ax.get_xticklabels(), size = 20)
+                sns.heatmap(correlations, annot=True, fmt=".2f", annot_kws={"fontsize":10})
+                ax.set_title("Correlations Between {} and Predictors".format(dependent_variable), size=14)
+                ax.set_yticklabels(ax.get_yticklabels(), size = 10)
+                ax.set_xticklabels(ax.get_xticklabels(), size = 10)
                 plt.yticks(rotation=0) 
-                plt.xticks(rotation=90) 
+                plt.xticks(rotation=90)
+                plt.tight_layout()
+
+                correlations = clean_training_data.select_dtypes("number").corr()
 
                 # Save the plot as a PNG image with 300 pixels per inch (ppi)
                 variable = variable.replace(r"/", "-")
@@ -772,6 +775,7 @@ def save_png_encoded(filepath:str, fig:plt.Figure):
 
     # Set the new dimensions for the figure
     fig.set_size_inches(new_width_inches, new_height_inches)
+    fig.tight_layout()
 
     # Save the figure to a buffer
     buffer = io.BytesIO()

@@ -68,11 +68,11 @@ class Forecaster():
         hyperparameters (dict): all optional hyperparamters for the model (see method definition for default values)
         """
         # fit point forecasting Prophet models 
-        residuals = self.fit_prophet_models(clean_training_data=clean_training_data, dependent_variable=dependent_variable, **hyperparameters)
+        residuals = self._fit_prophet_models(clean_training_data=clean_training_data, dependent_variable=dependent_variable, **hyperparameters)
 
         # fit point forecasting VAR model
-        squared_errors = self.fit_point_var(residuals=residuals, dependent_variable=dependent_variable, strong_predictors=strong_predictors)
-        self.fit_error_forecaster(dependent_variable=dependent_variable, squared_errors=squared_errors, **hyperparameters)
+        squared_errors = self._fit_point_var(residuals=residuals, dependent_variable=dependent_variable, strong_predictors=strong_predictors)
+        self._fit_error_forecaster(dependent_variable=dependent_variable, squared_errors=squared_errors, **hyperparameters)
 
 
     """
@@ -314,6 +314,20 @@ class Forecaster():
         error_forecasts = error_forecasts + error_trend
 
         return point_prophet_forecasts + point_var_forecasts, error_forecasts
+    
+
+    """
+    This method is used for making predictions on evaluation data while updating the model after a given number of time-steps. 
+        In this way, we can apecifically evaluate the model's ability to make N hours ahead forecasts, where N is a provided 
+        argument. The default predict method calculates all predictions together without updating the model using actual 
+        observations along the way. This method can be used to compare the performance of a fit Forecaster object with day-ahead 
+        forecasts from the EIA.
+    """
+    def predict_with_updates(hours_ahead:int, evaluation_dataset:pd.DataFrame, update_period:int):
+        """
+        TODO
+        """
+        pass
 
 
     """

@@ -20,8 +20,9 @@ import dash_app_functions as daf
 IMAGE_WIDTH = 750
 saved_directory = r"Saved"
 dependent_variable = r"Energy Demand (MWH)"
-now = datetime.now()
-now = now.strftime("%Y-%m-%d %H:%M:%S")
+now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+explanation_text_style = {"width":"1000px"}
+dropdown_menu_style = {"width":"500px"}
 
 # Create Dash app
 app = dash.Dash(__name__, suppress_callback_exceptions=True)
@@ -33,14 +34,16 @@ navigation_button_ids = dict(zip(["homepage", "page1", "page2", "page3"], ["lp",
 landing_page_layout = html.Div([
     html.H1('Residential Energy Demand Forecasting Application'),
     html.H5("Created by Tobias Butler. Last updated {}".format(now)),
+    html.Br(),
+    html.H3("About This Application"),
     html.Div(
-        """This small web application is designed to provide an interactive way of understanding how data collected from the U.S. Energy Information Agency (EIA), 
+        """This small web application is designed to provide an interactive way of understanding how data collected from the U.S. Energy Information Administration (EIA), 
         the U.S. National Oceanic Atmospheric Agency (NOAA), and the U.S. Bureau of Labor Statistics (BLS), was analyzed and used to develop a Residential Energy Demand 
-        Forecasting Pipeline. All data collected is localized around New York City. More specific details will be provided in future updates."""
+        Forecasting Pipeline. All data collected is localized around New York City. More specific details will be provided in future updates.""", style=explanation_text_style
     ),
     html.Br(),
     html.Div("""This page provides a user guide for navigating the application and using the other pages. Feel free to leave this page and head to one of the 
-             others using the buttons at the bottom at any time."""),
+             others using the buttons at the bottom at any time.""", style=explanation_text_style),
     html.Br(),
     html.Div( # user guide
         [
@@ -48,34 +51,60 @@ landing_page_layout = html.Div([
         html.Div("""This web application has been broken into three pages, each of which present information about a different component of the pipeline. The first 
             page presents some of the visualizations used during the exploratory data analysis to help guide data cleansing and processing. The second page presents 
             how the underlying forecast model was fit, tuned, and evaluated using holdout data. The third page applies the model and shows its estimated energy 
-            demand forecasts into the future."""),
+            demand forecasts into the future.""", style=explanation_text_style),
         html.Br(),
-        html.H4("Page 1: Exploratory Data Analysis"),
+        html.Div("""This application contains both static images and interactive Plotly figures. When hovering over part of a visual, if the cursor changes its shape 
+            to a crosshair or clickable icon, then the visual is interactive. Plotly figures enable users to zoom and to hide/unhide certain elements of the visual. 
+            See an example of this interactivity below.""", style=explanation_text_style),
+        html.H5("Example of Interactive Visuals"),
+        html.Img(id='example_plotly_interactivity', className="image_with_border", style={"width":"1000px"}, src=r'assets/example_plotly_interactivity.gif', 
+            alt="Image showing example of dropdown menu"),
+        html.Br(),html.Br(),
+        html.Div("""Feel free to click around and see what you are able to do to each visual. Plotly figures always have a "reset axes" button in the upper right corner 
+            that will revert the visual back to its original form. That button looks like this:""", style=explanation_text_style),
+        html.Img(id='example_plotly_reset', className="image_with_border", style={"width":"150px"}, src=r'assets/example_plotly_reset.png', 
+            alt="Image showing example of dropdown menu"),
+        html.Br(),html.Br(),html.Br(),
+        html.H3("Page 1: Exploring the Data"),
         html.Div("""The first page of this application presents several exploratory visuals to help understand the behavior of each variable in the pipeline's dataset. 
             To avoid overcrowding the page, each type of visual is only presented for one variable at a time. In order to change which variable is being displayed for 
             each type of visual, there are dropdown menus that can be used to select from any of the relevant variables. Use these to explore the behavior of different 
-            variables within the dataset."""),
-        html.Br(),
+            variables within the dataset. Below is an example of what the dropdown menus look like:""", style=explanation_text_style),
         html.H5("Example of Dropdown Menu:"),
-        html.Img(id='example1', style={'width':'75%'}, src=r'assets/example1.png', alt="Image showing example of dropdown menu"),
-        html.Br(),
-        html.H4("Page 2: Fitting the Forecasting Model"),
+        html.Img(id='example1', className="image_with_border", src=r'assets/example1.png', alt="Image showing example of Plotly figure interactivity"),
+        html.Br(),html.Br(),
+        html.Div("""The available exploratory visuals included on Page 1 include:"""),
+        html.Ul([html.Li("Raw time series plots (with outliers highlighted)"), html.Li("Variable Distributions"), 
+            html.Li("Scatterplots between Energy Demand and other variables"), html.Li("Time series decompositions (into trend and seasonal components)")]),
+        html.Br(),html.Br(),
+        html.H3("Page 2: Explaining the Model"),
         html.Div("""The second page of the application presents an overview of the model fitting and tuning methods, along with a final performance evaluation and report 
-            (this page is still under development). The report is intended to help users understand the usefulness and/or limitations of the forecasting pipeline before 
-            proceeding to the final page to see it in action. In a future update, users will be able to save the report as an html file."""),
+            (that is still under development). The report contains accuracy metrics for the forecasting model and compare's its predictive performance to alternative baseline 
+            models. This information is intended to help users understand the usefulness and/or limitations of the forecasting pipeline before 
+            proceeding to the final page to see it in action.""", style=explanation_text_style),
         html.Br(),
-        html.H4("Page 3: The Final Product"),
-        html.Div("""The third page of the application presents forecasts from the pipeline up to two years into the future. Users can change the forecasting horizon of the 
-            model by adjusting the slider below the forecasting visualization. In a future update, users will be given an option to download the selected range of forecasts 
-            as a csv file."""),
-        html.Img(id='example3', style={'width':'75%'}, src=r'assets/example3.png', alt="example of slider on page 3"),
+        html.Div("""On this page, users have the ability to download (as an html file) some of the visuals and tabular performance metrics displayed. This way, one can easily 
+        share the predictive capabilities of the model with others without needing to delve into the entire application. Look for a clickable link similar to that shown below:""",
+            style=explanation_text_style),
+        html.H5("Example of Download Feature:"),
+        html.Img(id='example2', className="image_with_border", src=r'assets/example2.png', alt="example of download button on page 2"),
+        html.Br(),html.Br(),html.Br(),
+        html.H3("Page 3: The Final Product"),
+        html.Div("""The third page of the application presents forecasts from the model up to two years into the future. Users can adjust the forecasting horizon of the 
+            model by moving the slider underneath the forecasting visualization (shown below).""", style=explanation_text_style),
+        html.Img(id='example3', className="image_with_border", style={"width":"1500px"}, src=r'assets/example3.png', alt="example of slider on page 3 (The Final Product)"),
+        html.Br(),html.Br(),
+        html.Div("""Users can also download these future forecasts as a csv file by clicking on the "Download Future Forecasts (.csv)" button.""", style=explanation_text_style),
+        html.Img(id='example_download_ff', className="image_with_border", style={"width":"200px"}, src=r'assets/example_download_ff.png', 
+            alt="example of download button on page 3 (The Final Product)")
         ]
     ),
+    html.Br(),
     html.Div(style={'width': '100%', 'display': 'flex', 'justify-content': 'space-between'}, children=[
-        html.Button('Reset Home Page', id=navigation_button_ids['homepage'], n_clicks=0, style={'width': '25%'}),
-        html.Button('Page 1', id=navigation_button_ids['page1'], n_clicks=0, style={'width': '25%'}),
-        html.Button('Page 2', id=navigation_button_ids['page2'], n_clicks=0, style={'width': '25%'}),
-        html.Button('Page 3', id=navigation_button_ids['page3'], n_clicks=0, style={'width': '25%'}),
+        html.Button('Reset This Page', id=navigation_button_ids['homepage'], n_clicks=0, style={'width': '25%'}),
+        html.Button('Exploring the Data', id=navigation_button_ids['page1'], n_clicks=0, style={'width': '25%'}),
+        html.Button('Explaining the Model', id=navigation_button_ids['page2'], n_clicks=0, style={'width': '25%'}),
+        html.Button('The Final Product', id=navigation_button_ids['page3'], n_clicks=0, style={'width': '25%'}),
     ])
 ])
 
@@ -110,63 +139,77 @@ page1_layout = html.Div([
             Independent System Operator (NYISO), was obtained from the EIA and combined with several weather and 
             economic related variables. Hourly weather data was recorded by the New York Central Park weather 
             station and was gathered from the NOAA. Monthly economic inidcators for New York City were obtained 
-            from the Bureau of Labor Statistics."""),
+            from the Bureau of Labor Statistics.""", style=explanation_text_style),
         html.Br(),
         html.Div("""The following figure shows a raw plot of the selected time series variable. The start date 
             is the earliest point at which hourly residential energy demand was available through the NYISO.
-            Other variables can be selected from the dropdown menu to see their raw time series distribution."""),
+            Other variables can be selected from the dropdown menu to see their raw time series distribution.""", 
+            style=explanation_text_style),
+            html.Br(),
         html.Div([
             dcc.Dropdown(
                 id='rts-dropdown',
                 options=rts_dropdown_options,
-                value=dependent_variable  # Default value
+                value=dependent_variable,
+                style=dropdown_menu_style
             ),
-            html.Div("Raw Time Series Plot"),
             html.Div([], id='raw-time-series'),
             html.Br(),html.Br(),html.Br(),
-            html.Div("""For each of the time series variables, outliers were detected using moving average distribution estimation, similar to that described by __.
+            html.H4("Identifying Outliers"),
+            html.Div("""For each of the time series variables, outliers were detected using moving average distribution estimation, similar to that described by Blázquez-García et al. (2022).
                 A conservative probability threshold of 0.001 was used alongside an N of 1000 in order to detect observations with extremely low probabilities of 
                 being generated from the same distribution as the nearest 1000 observations. Once identified, outliers were temporarily replaced with missing values 
-                until filled during imputation. In the following figure, these points have been highlighted in red."""),
+                until filled during imputation. In the following figure, these points have been highlighted in red.""", style=explanation_text_style),
+                html.Br(),
             dcc.Dropdown(
                 id='outliers-dropdown',
                 options=outlier_dropdown_options,
-                value=dependent_variable  # Default value
+                value=dependent_variable,
+                style=dropdown_menu_style
             ),
-            html.Div("Time Series Plot with Outliers Identified"),
             html.Div([], id='outliers'),
             html.Br(),html.Br(),html.Br(),html.Br(),
+            html.H4("Distribution Plot and Scatterplot"),
             html.Div(r"""For all variables in the dataset, distributions were produced to help recognize any ill-conditioned distributions that required transformations, 
                 and scatterplots between them and the dependent variable, Energy Demand (MWH), were produced to help understand the types of relationships 
                 (linear or nonlinear) present in the dataset. These two types of visuals are shown below for the variable selected below. By default, when 
-                "Energy Demand (MWH)" is selected, a heatmap of correlation coefficients between all variables is shown."""),
+                "Energy Demand (MWH)" is selected, a heatmap of correlation coefficients between all variables is shown.""", style=explanation_text_style),
             html.Br(),
             dcc.Dropdown(
                 id='scatterplots-dropdown',
                 options=scatterplot_dropdown_options,
-                value=dependent_variable  # Default value
+                value=dependent_variable,
+                style=dropdown_menu_style
             ),
-            html.Img(id='distribution', style={'width':'750px'}),
-            html.Br(),
-            html.Img(id='scatterplot', style={'width':'750px'}),
+            # html.Div([
+            #     html.Img(id='distribution', style={'width': '50%', 'margin-right': '10px', 'display': 'inline-block'}),
+            #     html.Img(id='scatterplot', style={'width': '50%', 'display': 'inline-block'})
+            # ]),
+            html.Div(style={'display': 'flex', "width":"1500px", 'align-items': 'flex-start'}, children=[
+                html.Img(id='distribution', style={'width': '50%', 'margin-right': '50px', 'object-fit': 'contain'}),
+                html.Img(id='scatterplot', style={'width': '50%', 'object-fit': 'contain'})
+            ]),
             html.Br(),html.Br(),html.Br(),html.Br(),
+            html.H4("Time Series Decomposition Plots"),
             html.Div("""Lastly, it is important to understand how each time series variable, especially the dependent variable, is impacted by trend and seasonality components. 
                 Below, time series decomposition plots estimating trend, yearly seasonality, weekly seasonality, and daily seasonality are provided for each time series variable 
-                in the dataset."""),
+                in the dataset.""", style=explanation_text_style),
+            html.Br(),
             dcc.Dropdown(
                 id='decompositions-dropdown',
                 options=decomposition_dropdown_options,
-                value=dependent_variable  # Default value
+                value=dependent_variable,
+                style=dropdown_menu_style
             ),
-            html.Img(id='decomposition', style={'width':'750px'}),
+            html.Img(id='decomposition', style={'width':'750px'}, alt="Time series decomposition of variable selected above"),
         ]),
         html.Br()
     ]),
     html.Div(style={'width': '100%', 'display': 'flex', 'justify-content': 'space-between'}, children=[
-        html.Button('Home Page', id=navigation_button_ids['homepage'], n_clicks=0, style={'width': '25%'}),
-        html.Button('Reset Page 1', id=navigation_button_ids['page1'], n_clicks=0, style={'width': '25%'}),
-        html.Button('Page 2', id=navigation_button_ids['page2'], n_clicks=0, style={'width': '25%'}),
-        html.Button('Page 3', id=navigation_button_ids['page3'], n_clicks=0, style={'width': '25%'}),
+        html.Button('User Guide', id=navigation_button_ids['homepage'], n_clicks=0, style={'width': '25%'}),
+        html.Button('Reset This Page', id=navigation_button_ids['page1'], n_clicks=0, style={'width': '25%'}),
+        html.Button('Explaining the Model', id=navigation_button_ids['page2'], n_clicks=0, style={'width': '25%'}),
+        html.Button('The Final Product', id=navigation_button_ids['page3'], n_clicks=0, style={'width': '25%'}),
     ])
 ])
 
@@ -178,33 +221,34 @@ page2_layout = html.Div([
     html.H3("Hyperparameter Tuning (under development)"),
     html.Div(["""The forecasting model for this pipeline was tuned using grid-search hyperparameter tuning and 5-Folds 
               rolling cross validation. Details about this process will be provided in the next update."""]),
-    html.Div([], id="cross-validation-plot"),
+    html.Div([], id="cross-validation-plot", style=explanation_text_style),
     html.Br(),
     html.H3("Final Model Evaluation"),
     html.Div([r"""Once an optimal set of hyperparameters were obtained for the underlying forecasting model, its predictive 
               performance was evaluated on a holdout dataset containing the most recent 10% of Energy Demand Observations. 
               The time series plot below presents the forecasting model's predictions over this holdout time period along with 
-              the actual observed values for comparison."""]),
+              the actual observed values for comparison."""], style=explanation_text_style),
     html.Div([], id="final-evaluation-plot"),
     html.Br(),
     html.H5("Performance Reports"),
     html.Div([r"""The following report describes the performance of the model compared to a baseline moving average using multiple metrics. 
-              In future updates, forecasts from the EIA will be included for an additional comparison."""]),
+              In future updates, forecasts from the EIA will be included for an additional comparison."""], style=explanation_text_style),
     html.Br(),
     html.Div(children=[], id="final-evaluation-results"),
     html.Div([
-    html.A('Download Performance Results (csv)', href='assets/performance_report.csv', download='forecasting_evaluation_table.csv')
+        # TODO: include downloadable html report that is always up-to-date with this page...
+    html.A('Download Model Summary Performance Report (.html)', href='assets/performance_report.csv', download='forecasting_evaluation_table.csv')
     ]),
     html.Br(), html.Br(),
     html.Div([r"""Lastly, in future updates, this section will include a report that describes the relative importance of each variable to 
-            the model based on the results of a sensitivity analysis."""]),
+            the model based on the results of a sensitivity analysis."""], style=explanation_text_style),
     html.Div([], id="final-model-results"),
     html.Br(),
     html.Div(style={'width': '100%', 'display': 'flex', 'justify-content': 'space-between'}, children=[
-        html.Button('Home Page', id=navigation_button_ids['homepage'], n_clicks=0, style={'width': '25%'}),
-        html.Button('Page 1', id=navigation_button_ids['page1'], n_clicks=0, style={'width': '25%'}),
-        html.Button('Reset Page 2', id=navigation_button_ids['page2'], n_clicks=0, style={'width': '25%'}),
-        html.Button('Page 3', id=navigation_button_ids['page3'], n_clicks=0, style={'width': '25%'}),
+        html.Button('User Guide', id=navigation_button_ids['homepage'], n_clicks=0, style={'width': '25%'}),
+        html.Button('Exploring the Data', id=navigation_button_ids['page1'], n_clicks=0, style={'width': '25%'}),
+        html.Button('Reset This Page', id=navigation_button_ids['page2'], n_clicks=0, style={'width': '25%'}),
+        html.Button('The Final Product', id=navigation_button_ids['page3'], n_clicks=0, style={'width': '25%'}),
     ])
 ])
 
@@ -225,11 +269,13 @@ page3_layout = html.Div([
     ),
     html.Div(id='slider-output-container'),
     html.Br(),
+    html.A('Download Future Forecasts (.csv)', href='assets/future_forecasts.csv', download='NYHourlyResidentialEnergyDemandForecasts.csv'),
+    html.Br(),html.Br(),
     html.Div(style={'width': '100%', 'display': 'flex', 'justify-content': 'space-between'}, children=[
-        html.Button('Home Page', id=navigation_button_ids['homepage'], n_clicks=0, style={'width': '25%'}),
-        html.Button('Page 1', id=navigation_button_ids['page1'], n_clicks=0, style={'width': '25%'}),
-        html.Button('Page 2', id=navigation_button_ids['page2'], n_clicks=0, style={'width': '25%'}),
-        html.Button('Reset Page 3', id=navigation_button_ids['page3'], n_clicks=0, style={'width': '25%'}),
+        html.Button('User Guide', id=navigation_button_ids['homepage'], n_clicks=0, style={'width': '25%'}),
+        html.Button('Exploring the Data', id=navigation_button_ids['page1'], n_clicks=0, style={'width': '25%'}),
+        html.Button('Explaining the Model', id=navigation_button_ids['page2'], n_clicks=0, style={'width': '25%'}),
+        html.Button('Reset This Page', id=navigation_button_ids['page3'], n_clicks=0, style={'width': '25%'}),
     ])
 ])
 
