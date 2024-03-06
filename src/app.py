@@ -42,9 +42,12 @@ landing_page_layout = html.Div([
         Forecasting Pipeline. All data collected is localized around New York City. More specific details will be provided in future updates.""", style=explanation_text_style
     ),
     html.Br(),
-    html.Div("""This page provides a user guide for navigating the application and using the other pages. Feel free to leave this page and head to one of the 
-             others using the buttons at the bottom at any time.""", style=explanation_text_style),
+    html.Div("""This page provides a user guide for navigating the application and using the other pages. To navigate to the other pages, use the buttons at the bottom of 
+        the page. They look like this:""", style=explanation_text_style),
     html.Br(),
+    html.Img(id='example-navigation-buttons', className="image_with_border", style={"width":"1500px"}, src=r'assets/example_navigation_buttons.png', 
+            alt="Image showing example of dropdown menu"),
+    html.Br(),html.Br(),
     html.Div( # user guide
         [
         html.H2("User Guide"),
@@ -93,7 +96,7 @@ landing_page_layout = html.Div([
         html.Div("""The third page of the application presents forecasts from the model up to two years into the future. Users can adjust the forecasting horizon of the 
             model by moving the slider underneath the forecasting visualization (shown below).""", style=explanation_text_style),
         html.Img(id='example3', className="image_with_border", style={"width":"1500px"}, src=r'assets/example3.png', alt="example of slider on page 3 (The Final Product)"),
-        html.Br(),html.Br(),
+        html.Br(),html.Br(),html.Br(),
         html.Div("""Users can also download these future forecasts as a csv file by clicking on the "Download Future Forecasts (.csv)" button.""", style=explanation_text_style),
         html.Img(id='example_download_ff', className="image_with_border", style={"width":"200px"}, src=r'assets/example_download_ff.png', 
             alt="example of download button on page 3 (The Final Product)")
@@ -101,11 +104,12 @@ landing_page_layout = html.Div([
     ),
     html.Br(),
     html.Div(style={'width': '100%', 'display': 'flex', 'justify-content': 'space-between'}, children=[
-        html.Button('Reset This Page', id=navigation_button_ids['homepage'], n_clicks=0, style={'width': '25%'}),
-        html.Button('Exploring the Data', id=navigation_button_ids['page1'], n_clicks=0, style={'width': '25%'}),
-        html.Button('Explaining the Model', id=navigation_button_ids['page2'], n_clicks=0, style={'width': '25%'}),
-        html.Button('The Final Product', id=navigation_button_ids['page3'], n_clicks=0, style={'width': '25%'}),
-    ])
+        html.Button('Reset This Page', id=navigation_button_ids['homepage'], n_clicks=0, className="navigation_button"),
+        html.Button('Exploring the Data', id=navigation_button_ids['page1'], n_clicks=0, className="navigation_button"),
+        html.Button('Explaining the Model', id=navigation_button_ids['page2'], n_clicks=0, className="navigation_button"),
+        html.Button('The Final Product', id=navigation_button_ids['page3'], n_clicks=0, className="navigation_button"),
+    ]),
+    html.Br()
 ])
 
 
@@ -203,7 +207,7 @@ page1_layout = html.Div([
             ),
             html.Img(id='decomposition', style={'width':'750px'}, alt="Time series decomposition of variable selected above"),
         ]),
-        html.Br()
+        html.Br(),html.Br(),
     ]),
     html.Div(style={'width': '100%', 'display': 'flex', 'justify-content': 'space-between'}, children=[
         html.Button('User Guide', id=navigation_button_ids['homepage'], n_clicks=0, style={'width': '25%'}),
@@ -243,7 +247,7 @@ page2_layout = html.Div([
     html.Div([r"""Lastly, in future updates, this section will include a report that describes the relative importance of each variable to 
             the model based on the results of a sensitivity analysis."""], style=explanation_text_style),
     html.Div([], id="final-model-results"),
-    html.Br(),
+    html.Br(),html.Br(),
     html.Div(style={'width': '100%', 'display': 'flex', 'justify-content': 'space-between'}, children=[
         html.Button('User Guide', id=navigation_button_ids['homepage'], n_clicks=0, style={'width': '25%'}),
         html.Button('Exploring the Data', id=navigation_button_ids['page1'], n_clicks=0, style={'width': '25%'}),
@@ -270,7 +274,7 @@ page3_layout = html.Div([
     html.Div(id='slider-output-container'),
     html.Br(),
     html.A('Download Future Forecasts (.csv)', href='assets/future_forecasts.csv', download='NYHourlyResidentialEnergyDemandForecasts.csv'),
-    html.Br(),html.Br(),
+    html.Br(),html.Br(),html.Br(),
     html.Div(style={'width': '100%', 'display': 'flex', 'justify-content': 'space-between'}, children=[
         html.Button('User Guide', id=navigation_button_ids['homepage'], n_clicks=0, style={'width': '25%'}),
         html.Button('Exploring the Data', id=navigation_button_ids['page1'], n_clicks=0, style={'width': '25%'}),
