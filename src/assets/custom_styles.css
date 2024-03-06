@@ -1,0 +1,15 @@
+
+.image_with_border
+{
+    border: 1px solid black;
+    /* border-width: 2px;
+    border-color: Black; */
+    width:300px;
+}
+
+.navigation_button
+{
+    font-size:18px;
+    width:25%;
+    height:30px;
+}

@@ -1,5 +1,12 @@
 # created by Tobias Butler 
-# Last Modified: 02/13/2024
+# Last Modified: 03/01/2024
+"""
+Description: This module contains functionality to gather hourly residential energy demand data local to New York City 
+    from the U.S. Energy Information Agency (EIA), hourly weather-related data local to Central Park weather station from 
+    the U.S. National Oceanic and Atmospheric Agency (NOAA), monthly energy price data local to New York State from the EIA, 
+    and monthly economic indices local to New York City from the U.S. Bureau of Labor Statistics (BLS), and combine them all 
+    into a single dataset with an hourly timescale.
+"""
 
 # import third party libraries
 import pandas as pd
@@ -336,6 +343,85 @@ def combine_data(energy_demand_data:pd.DataFrame=None, energy_price_data:pd.Data
     all_data = all_data.apply(lambda x: x.astype("float", errors="ignore"))
 
     return all_data
+
+
+"""
+This function retrieves hourly day-ahead energy demand forecasts for the entirety of the NYISO between the start and end 
+    dates provided. It requires an API key for the HTTP Get requests. The EIA has a 5000 value limit, so this function calls a 
+    helper function if there are more than 5000 periods between the start and end dates provided.
+"""
+def get_eia_forecasts(start:np.datetime64, end:np.datetime64, eia_api_key:str=None, medrl:int=5000, **kwargs):
+    """
+    Paramters
+    ----------
+    start (numpy.datetime64): The starting date for the data to be retrieved
+
+    end (numpy.datetime64): The ending date for the data to be retrieved
+
+    eia_api_key (str): An api key obtained from the EIA website. By default, this is set to None and a key is looked for 
+        in a project directory called Configuration Files.
+
+    medrl (maximum energy demand request length) (int): The maximum number of values to request from the EIA per request. 
+        The default value is 5000 because that is the uppermost limit set by the EIA API
+
+    Returns
+    ----------
+    pandas.DataFrame: A dataframe containing hourly energy demand observations for New York City between the provided 
+        start date and end date.
+    """
+    eia_forecasts = []
+    num_days_requested = (end - start).astype("timedelta64[D]").astype(int)
+    num_days_per_request = medrl//24
+    num_requests = int(np.ceil(num_days_requested / num_days_per_request))
+    print("Requesting EIA energy demand forecast data from EIA over {} requests".format(num_requests))
+
+    # get api_key for eia
+    if eia_api_key is None:
+        with open("Configuration Files/api_keys.yml", "r") as file:
+            eia_api_key = yaml.safe_load(file)["eia"]
+    
+    # request data from EIA in batches
+    eia_start = deepcopy(start)
+    while eia_start < end:
+        eia_end = eia_start + np.timedelta64(num_days_per_request, 'D')
+        
+        if eia_end > end:
+            df = repeated_energy_demand_request(eia_start, end, eia_api_key)
+            eia_forecasts.append(df)
+            break
+        else:
+            df = repeated_energy_demand_request(eia_start, eia_end, eia_api_key)
+            eia_forecasts.append(df)
+        eia_start = eia_end
+
+        # wait for 5 seconds before continuing requests (to avoid being cutoff by API)
+        time.sleep(5)
+
+    energy_demand_data = pd.concat(eia_forecasts, axis=0)
+    energy_demand_data = energy_demand_data[~energy_demand_data.index.duplicated(keep="first")]
+    return energy_demand_data
+
+
+"""
+This function requests hourly day-ahead energy demand forecast data for the NYISO from the EIA web api. 
+    This is a helper function designed to be called repeatedly since only 5000 values can be obtained 
+    from the EIA's web API per request.
+"""
+def repeated_eia_forecast_request(start:np.datetime64, end:np.datetime64, eia_api_key:str) -> pd.DataFrame:
+    # convert start and end datetimes into hourly strings
+    start = np.datetime_as_string(start, unit="h")
+    end = np.datetime_as_string(end, unit="h")
+    
+    # define GET request    
+    request_url = fr"https://api.eia.gov/v2/electricity/rto/region-data/data/?api_key={eia_api_key}" \
+        fr"&frequency=hourly&data[0]=value&facets[respondent][]=NYIS&facets[type][]=DF"\
+        fr"&start={start}&end={end}&sort[0][column]=period&sort[0][direction]=desc&offset=0"
+
+    r = requests.get(request_url)
+    energy_demand = r.json()["response"]["data"]
+    energy_demand = pd.json_normalize(energy_demand)[["period", "value"]].rename(
+        columns={"period":"Time", "value":"EIA Forecast (MWH)"}).set_index(["Time"])
+    return energy_demand
 
 
 if __name__ == "__main__":

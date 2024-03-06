@@ -3,7 +3,7 @@ Created by: Tobias Butler
 Last Modified: 02/22/2024
 Description: This Python module contains functionality to clean and process a preliminary dataset containing energy 
     demand, weather, and economic related data obtained from the EIA, NOAA, and BLS. Running it as a script requires 
-    an approporiately named csv file in the local working directory and will produce a new dataset and optional 
+    an appropriately named csv file in the local working directory and will produce a new dataset and optional 
     visuals saved to the local working directory.
 """
 
@@ -18,6 +18,8 @@ import plotly.graph_objects as go
 import pickle as pkl
 import sys
 import os
+import io
+import base64
 
 # prevent logging when fitting Prophet models
 import logging
@@ -25,6 +27,8 @@ logger = logging.getLogger('cmdstanpy')
 logger.addHandler(logging.NullHandler())
 logger.propagate = False
 logger.setLevel(logging.CRITICAL)
+
+png_width = 750
 
 
 class PreprocessingPipeline():
@@ -45,7 +49,7 @@ class PreprocessingPipeline():
         # Create file system for saving datasets and figures
 
         # Define subdirectories
-        subdirectories = {
+        self.subdirectories = {
             'Datasets': [],
             'Models': ['Prophet'],
             'Plotly Figures': ['Raw Time Series', 'Outlier Detection'],
@@ -57,7 +61,7 @@ class PreprocessingPipeline():
             os.makedirs(self.saved_directory)
 
         # Create subdirectories
-        for subdir, subsubdirs in subdirectories.items():
+        for subdir, subsubdirs in self.subdirectories.items():
             subdir_path = os.path.join(self.saved_directory, subdir)
             if not os.path.exists(subdir_path): os.makedirs(subdir_path)
             for subsubdir in subsubdirs:
@@ -88,7 +92,26 @@ class PreprocessingPipeline():
         pandas.DataFrame: Also a clean dataset but with all trend and seasonal components removed from each variable. This dataset is suited 
             for predictive modeling by a autoregressive model that does not capture trend or seasonal patterns (ARIMA, VAR, etc.)
         """
-        # create directories for saving figures and models
+        # if producing eda plots, delete current contents of directories
+        if self.produce_eda_plots:
+            for subdir, subsubdirs in self.subdirectories.items():
+                subdir_path = os.path.join(self.saved_directory, subdir)
+                for subsubdir in subsubdirs:
+                    subsubdir_path = os.path.join(subdir_path, subsubdir)
+                    files = os.listdir(subsubdir_path)
+                    for file in files:
+                        file_path = os.path.join(subsubdir_path, file)
+                        try:
+                            os.remove(file_path)
+                        except Exception as e:
+                            print(f"Error deleting {file_path}: {e}")
+
+        # Create the main directory if it doesn't exist
+        if not os.path.exists(self.saved_directory):
+            os.makedirs(self.saved_directory)
+
+        # Create subdirectories
+        
         
         # get path to preliminary dataset if not provided
         if preliminary_dataset is None:
@@ -347,9 +370,9 @@ class PreprocessingPipeline():
             clean_data.loc[to_impute, variable] = interpolated_values["yhat"][to_impute].values
 
             # save fit model
-            # variable = variable.replace(r"/", "-")
-            # with open("{}/{}.pkl".format(path_to_prophet_models, variable), "wb") as file:
-            #     pkl.dump(model, file=file)
+            variable = variable.replace(r"/", "-")
+            with open("{}/{}.pkl".format(path_to_prophet_models, variable), "wb") as file:
+                pkl.dump(model, file=file)
         
         for variable in [x for x in outliers_removed_data.columns if x not in time_series_variables]:
             print(f"Interpolating for variable {variable}")
@@ -409,7 +432,8 @@ class PreprocessingPipeline():
             ax.legend()
             # Save the plot as a PNG image with 300 pixels per inch (ppi)
             variable = variable.replace(r"/", "-")
-            fig.savefig(r'{}/{}.png'.format(path_to_plots, variable), dpi=300)
+            # fig.savefig(r'{}/{}.png'.format(path_to_plots, variable), dpi=300)
+            save_png_encoded(r'{}/{}.png'.format(path_to_plots, variable), fig)
             plt.close()
 
         # plot distributions for categorical variables
@@ -423,7 +447,8 @@ class PreprocessingPipeline():
             ax.bar_label(ax.containers[0])
             # Save the plot as a PNG image with 300 pixels per inch (ppi)
             variable = variable.replace(r"/", "-")
-            fig.savefig(r'{}/{}.png'.format(path_to_plots, variable), dpi=300)
+            # fig.savefig(r'{}/{}.png'.format(path_to_plots, variable), dpi=300)
+            save_png_encoded(r'{}/{}.png'.format(path_to_plots, variable), fig)
             plt.close()
 
         
@@ -464,16 +489,20 @@ class PreprocessingPipeline():
                 correlations = clean_training_data.select_dtypes("number").corr()
                 fig = plt.figure(figsize=(30,30))
                 ax = fig.add_subplot()
-                sns.heatmap(correlations, annot=True, fmt=".2f", annot_kws={"fontsize":24})
-                ax.set_title("Correlations Between {} and Predictors".format("Energy Demand (MWH)"), size=28)
-                ax.set_yticklabels(ax.get_yticklabels(), size = 20)
-                ax.set_xticklabels(ax.get_xticklabels(), size = 20)
+                sns.heatmap(correlations, annot=True, fmt=".2f", annot_kws={"fontsize":10})
+                ax.set_title("Correlations Between {} and Predictors".format(dependent_variable), size=14)
+                ax.set_yticklabels(ax.get_yticklabels(), size = 10)
+                ax.set_xticklabels(ax.get_xticklabels(), size = 10)
                 plt.yticks(rotation=0) 
-                plt.xticks(rotation=90) 
+                plt.xticks(rotation=90)
+                plt.tight_layout()
+
+                correlations = clean_training_data.select_dtypes("number").corr()
 
                 # Save the plot as a PNG image with 300 pixels per inch (ppi)
                 variable = variable.replace(r"/", "-")
-                plt.savefig(r'{}/{}.png'.format(path_to_plots, variable), dpi=300)
+                # plt.savefig(r'{}/{}.png'.format(path_to_plots, variable), dpi=300)
+                save_png_encoded(r'{}/{}.png'.format(path_to_plots, variable), fig)
                 plt.close()
             else:
                 # Calculate the correlation coefficient
@@ -491,7 +520,8 @@ class PreprocessingPipeline():
 
                 # Save the plot as a PNG image with 300 pixels per inch (ppi)
                 variable = variable.replace(r"/", "-")
-                fig.savefig(r'{}/{}.png'.format(path_to_plots, variable), dpi=300)
+                # fig.savefig(r'{}/{}.png'.format(path_to_plots, variable), dpi=300)
+                save_png_encoded(r'{}/{}.png'.format(path_to_plots, variable), fig)
                 plt.close()
 
         # scatter plots for categorical predictors
@@ -511,7 +541,8 @@ class PreprocessingPipeline():
 
             # Save the plot as a PNG image with 300 pixels per inch (ppi)
             variable = variable.replace(r"/", "-")
-            fig.savefig(r'{}/{}.png'.format(path_to_plots, variable), dpi=300)
+            # fig.savefig(r'{}/{}.png'.format(path_to_plots, variable), dpi=300)
+            save_png_encoded(r'{}/{}.png'.format(path_to_plots, variable), fig)
             plt.close()
 
 
@@ -618,7 +649,8 @@ class PreprocessingPipeline():
                 plt.tight_layout()
                 # Save the plot as a PNG image with 300 pixels per inch (ppi)
                 variable = variable.replace(r"/", "-")
-                fig.savefig(r'{}/{}.png'.format(path_to_plots, variable), dpi=300)
+                # fig.savefig(r'{}/{}.png'.format(path_to_plots, variable), dpi=300)
+                save_png_encoded(r'{}/{}.png'.format(path_to_plots, variable), fig)
                 plt.close()
         
         if save_residuals and self.save_datasets:
@@ -726,6 +758,38 @@ def detect_outliers(data:pd.Series, n:int=1000, p:float=0.001):
             outliers[i] = True
 
     return outliers
+
+
+def save_png_encoded(filepath:str, fig:plt.Figure):
+    # Get the original dimensions of the figure
+    original_width, original_height = fig.get_size_inches()
+
+    # Calculate the aspect ratio
+    aspect_ratio = original_height / original_width
+
+    # Set the new width to 750 pixels
+    new_width_inches = png_width / 100  # Convert pixels to inches
+
+    # Calculate the corresponding height
+    new_height_inches = new_width_inches * aspect_ratio
+
+    # Set the new dimensions for the figure
+    fig.set_size_inches(new_width_inches, new_height_inches)
+    fig.tight_layout()
+
+    # Save the figure to a buffer
+    buffer = io.BytesIO()
+    fig.savefig(buffer, format='png', dpi=200)
+    buffer.seek(0)
+
+    # Encode the buffer contents as base64
+    base64_encoded = base64.b64encode(buffer.read()).decode()
+
+    with open(filepath, "wb") as f:
+        f.write(base64.b64decode(base64_encoded))
+
+    # Embed the base64-encoded image in an HTML img tag
+    # html_img = f'<img src="data:image/png;base64,{base64_encoded}">'
 
 
 # # want to be able to call this function to fit all models, save them, and return them. Then use them in whatever this function was called from.

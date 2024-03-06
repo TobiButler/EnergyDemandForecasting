@@ -1,7 +1,7 @@
 """
 Author: Tobias Butler
 Last Modified: 02/27/2024
-Description: This module contains a Forecaster class and the associated methods to fit a probablisitic 
+Description: This module contains a Forecaster class and the associated methods to fit a probabilistic 
     forecasting model and use it to make predictions. It also contains some hyperparameter tuning functionality.
 
 Still to do: 
@@ -33,25 +33,22 @@ A class representing a probabilistic forecasting model. It fits basic statistica
     both point forecasts and their squared errors.
 """
 class Forecaster():
-    def __init__(self, path_to_saved_files:str="Saved") -> None:
+    def __init__(self) -> None:
         """
         Parameters:
         ------------
-        path_to_saved_files (str): a path to a directory that contains datasets, figures, and models 
-            for this project.
         """
         self.point_prophet_model = None
         self.point_var_model = None
         self.error_prophet_model = None
         self.error_var_model = None
         self.error_trend = None
-        self.path_to_saved_files = path_to_saved_files
 
 
 
     """
     This method fits the forecasting model. It requires a clean dataset, a string dependent variable, and takes 
-        a dictionary of optional hyperparameters
+        a dictionary of optional hyperparameters.
     """
     def fit(self, clean_training_data:pd.DataFrame, dependent_variable:str, strong_predictors:list=[], 
             hyperparameters:dict=dict(changepoint_prior_scale=0.001, seasonality_prior_scale=0.01, 
@@ -71,17 +68,17 @@ class Forecaster():
         hyperparameters (dict): all optional hyperparamters for the model (see method definition for default values)
         """
         # fit point forecasting Prophet models 
-        residuals = self.fit_prophet_models(clean_training_data=clean_training_data, dependent_variable=dependent_variable, **hyperparameters)
+        residuals = self._fit_prophet_models(clean_training_data=clean_training_data, dependent_variable=dependent_variable, **hyperparameters)
 
         # fit point forecasting VAR model
-        squared_errors = self.fit_point_var(residuals=residuals, dependent_variable=dependent_variable, strong_predictors=strong_predictors)
-        self.fit_error_forecaster(dependent_variable=dependent_variable, squared_errors=squared_errors, **hyperparameters)
+        squared_errors = self._fit_point_var(residuals=residuals, dependent_variable=dependent_variable, strong_predictors=strong_predictors)
+        self._fit_error_forecaster(dependent_variable=dependent_variable, squared_errors=squared_errors, **hyperparameters)
 
 
     """
-    This method fits univariate Prophet models to all variables in the dataset provided and returns the residual components
+    This is a private method that fits univariate Prophet models to all variables in the dataset provided and returns the residual components
     """
-    def fit_prophet_models(self, clean_training_data:pd.DataFrame, dependent_variable:str, changepoint_prior_scale:float=0.001, 
+    def _fit_prophet_models(self, clean_training_data:pd.DataFrame, dependent_variable:str, changepoint_prior_scale:float=0.001, 
         seasonality_prior_scale:float=0.01, **kwargs):
         """
         Parameters:
@@ -129,10 +126,10 @@ class Forecaster():
             return residuals
 
     """
-    This function fits a vector autoregressive (VAR) model to the residuals of the point forecasting Prophet 
+    This is a private method that fits a vector autoregressive (VAR) model to the residuals of the point forecasting Prophet 
         models.
     """
-    def fit_point_var(self, dependent_variable:str, residuals:pd.DataFrame, strong_predictors:list[str]=[]):
+    def _fit_point_var(self, dependent_variable:str, residuals:pd.DataFrame, strong_predictors:list[str]=[]):
         """
         Parameters:
         ----------
@@ -198,9 +195,9 @@ class Forecaster():
     
 
     """
-    This method fits the error (or variance) forecasting component of the model
+    This is a private method that fits the error (or variance) forecasting component of the model
     """
-    def fit_error_forecaster(self, dependent_variable:str, squared_errors:pd.DataFrame, 
+    def _fit_error_forecaster(self, dependent_variable:str, squared_errors:pd.DataFrame, 
         minimum_error_prediction:float=None, error_trend:float=1e-3, use_var_model:bool=True, **kwargs):
         """
         Parameters:
@@ -271,7 +268,8 @@ class Forecaster():
         
 
     """
-    This method makes probabilistic forecasts into the future. The model is required to be fit first.
+    This method makes probabilistic forecasts into the future. The model is required to be fit first. It returns 
+        both a series of point forecasts and a series of variance forecasts.
     """
     def predict(self, hours_ahead:int):
         """
@@ -287,7 +285,7 @@ class Forecaster():
         """
         # predict with point forecasting prophet model
         if self.point_prophet_model is not None:
-            df = self.point_prophet_model.make_future_dataframe(periods=hours_ahead+1, freq="H")
+            df = self.point_prophet_model.make_future_dataframe(periods=hours_ahead, freq="H")
             point_prophet_forecasts = self.point_prophet_model.predict(df)[["ds", "yhat"]].set_index("ds")
             point_prophet_forecasts = point_prophet_forecasts["yhat"].iloc[-hours_ahead:]
         else:
@@ -299,7 +297,7 @@ class Forecaster():
 
         # predict with squared error forecasting Prophet model
         if self.error_prophet_model is not None:
-            df = self.error_prophet_model.make_future_dataframe(periods=hours_ahead+1, freq="H")
+            df = self.error_prophet_model.make_future_dataframe(periods=hours_ahead, freq="H")
             error_prophet_forecasts = self.error_prophet_model.predict(df)[["ds", "yhat"]].set_index("ds")
             error_prophet_forecasts = error_prophet_forecasts["yhat"].iloc[-hours_ahead:]
             error_forecasts = error_prophet_forecasts
@@ -316,10 +314,24 @@ class Forecaster():
         error_forecasts = error_forecasts + error_trend
 
         return point_prophet_forecasts + point_var_forecasts, error_forecasts
+    
+
+    """
+    This method is used for making predictions on evaluation data while updating the model after a given number of time-steps. 
+        In this way, we can apecifically evaluate the model's ability to make N hours ahead forecasts, where N is a provided 
+        argument. The default predict method calculates all predictions together without updating the model using actual 
+        observations along the way. This method can be used to compare the performance of a fit Forecaster object with day-ahead 
+        forecasts from the EIA.
+    """
+    def predict_with_updates(hours_ahead:int, evaluation_dataset:pd.DataFrame, update_period:int):
+        """
+        TODO
+        """
+        pass
 
 
     """
-    This method takes data and a set of hyperparamters and conducts rolling cross-validation using MSE and weighted MSE metrics
+    This method takes data and a set of hyperparameters and conducts rolling cross-validation using MSE and weighted MSE metrics.
     """
     def cross_validate(self, num_folds:int, clean_training_data:pd.DataFrame, dependent_variable:str, hyperparameters:dict,
         strong_predictors:list[str]=[], return_predictions:bool=False):
@@ -395,7 +407,7 @@ class Forecaster():
 
 
     """
-    This method takes a list of hyperparameter sets and evaluates each using cross-validation
+    This method takes a list of hyperparameter sets and evaluates each using cross-validation.
     """
     def tune_hyperparameters(self, clean_training_data:pd.DataFrame, dependent_variable:str, 
         hyperparameter_sets:list[dict], num_cv_folds:int=5, strong_predictors:list[str]=[]):
