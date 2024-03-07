@@ -785,7 +785,7 @@ def detect_outliers(data:pd.Series, n:int=1000, p:float=0.001):
     return outliers
 
 
-def save_png_encoded(filepath:str, fig:plt.Figure):
+def save_png_encoded(filepath:str, fig:plt.Figure, return_raw_encoding:bool=False):
     # Get the original dimensions of the figure
     original_width, original_height = fig.get_size_inches()
 
@@ -812,6 +812,8 @@ def save_png_encoded(filepath:str, fig:plt.Figure):
 
     with open(filepath, "wb") as f:
         f.write(base64.b64decode(base64_encoded))
+    
+    if return_raw_encoding: return base64_encoded
 
     # Embed the base64-encoded image in an HTML img tag
     # html_img = f'<img src="data:image/png;base64,{base64_encoded}">'
