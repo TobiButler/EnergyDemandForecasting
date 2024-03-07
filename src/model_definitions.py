@@ -323,11 +323,12 @@ class Forecaster():
         observations along the way. This method can be used to compare the performance of a fit Forecaster object with day-ahead 
         forecasts from the EIA.
     """
-    def predict_with_updates(hours_ahead:int, evaluation_dataset:pd.DataFrame, update_period:int):
+    def predict_with_updates(hours_ahead:int, evaluation_residuals:pd.DataFrame, forecast_horizon_hours:int):
         """
         TODO
         """
-        pass
+        day_ahead_forecasts = []
+
 
 
     """

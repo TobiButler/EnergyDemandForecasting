@@ -386,11 +386,11 @@ def get_eia_forecasts(start:np.datetime64, end:np.datetime64, eia_api_key:str=No
         eia_end = eia_start + np.timedelta64(num_days_per_request, 'D')
         
         if eia_end > end:
-            df = repeated_energy_demand_request(eia_start, end, eia_api_key)
+            df = repeated_eia_forecast_request(eia_start, end, eia_api_key)
             eia_forecasts.append(df)
             break
         else:
-            df = repeated_energy_demand_request(eia_start, eia_end, eia_api_key)
+            df = repeated_eia_forecast_request(eia_start, eia_end, eia_api_key)
             eia_forecasts.append(df)
         eia_start = eia_end
 
@@ -398,6 +398,8 @@ def get_eia_forecasts(start:np.datetime64, end:np.datetime64, eia_api_key:str=No
         time.sleep(5)
 
     energy_demand_data = pd.concat(eia_forecasts, axis=0)
+    energy_demand_data.index = pd.to_datetime(energy_demand_data.index)
+    energy_demand_data = energy_demand_data.sort_index(ascending=True).astype(float)
     energy_demand_data = energy_demand_data[~energy_demand_data.index.duplicated(keep="first")]
     return energy_demand_data
 

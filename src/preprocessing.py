@@ -53,7 +53,7 @@ class PreprocessingPipeline():
             'Datasets': [],
             'Models': ['Prophet'],
             'Plotly Figures': ['Raw Time Series', 'Outlier Detection'],
-            'Static Visuals':['Distributions', 'Scatterplots', 'Decompositions']
+            'Static Visuals':['Distributions', 'Scatterplots', 'Decompositions'],
         }
 
         # Create the main directory if it doesn't exist
@@ -579,6 +579,7 @@ class PreprocessingPipeline():
         if path_to_prophet_models is None: path_to_prophet_models = r"{}/Models/Prophet".format(self.saved_directory)
 
         # loop through each variable, producing time series decomposition and optionally saving residuals
+        ts_breakdown = []
         for variable in clean_training_data.select_dtypes("number").columns:
             file_variable = variable.replace(r"/", "-")
             with open(r"{}/{}.pkl".format(path_to_prophet_models, file_variable), "rb") as file:
@@ -592,7 +593,31 @@ class PreprocessingPipeline():
             if save_residuals: clean_training_data.loc[:,variable] = forecasts["residual"].values
 
             if produce_plots and self.produce_eda_plots:
-                # define figure
+                # calculate correlation coefficients between components and time series
+                trend_correlation = np.corrcoef(forecasts['y'], forecasts['trend'])[0,1]
+                yearly_correlation = np.corrcoef(forecasts['y'], forecasts['yearly'])[0,1]
+                weekly_correlation = np.corrcoef(forecasts['y'], forecasts['weekly'])[0,1]
+                daily_correlation = np.corrcoef(forecasts['y'], forecasts['daily'])[0,1]
+                residual_correlation = np.corrcoef(forecasts['y'], forecasts['residual'])[0,1]
+                correlation_info = np.array([trend_correlation, yearly_correlation, weekly_correlation, daily_correlation, residual_correlation])
+                correlation_info = correlation_info/np.sum(correlation_info)
+                
+                # plot relative correlation coefficients
+                fig = plt.figure(figsize=(8,5))
+                ax = fig.add_subplot()
+                sns.barplot(y=correlation_info, x=["Trend", "Yearly", "Weekly", "Daily", "Residual"])
+                ax.set_title("Relative Contributions of Time Series Components to {}".format(variable))
+                ax.set_xlabel("Component")
+                ax.set_ylabel("Normalized R (Pearson correlation)")
+                ax.bar_label(ax.containers[0], fmt="%.2f")
+
+                # save figure
+                plt.tight_layout()
+                filename_variable = variable.replace(r"/", "-")
+                save_png_encoded(r'{}/{}_bar.png'.format(path_to_plots, filename_variable), fig)
+                plt.close()
+                
+                # define figure for time series decomposition
                 fig = plt.figure(figsize=(8,15))
 
                 # plot original time series
@@ -648,11 +673,11 @@ class PreprocessingPipeline():
                 # save figure
                 plt.tight_layout()
                 # Save the plot as a PNG image with 300 pixels per inch (ppi)
-                variable = variable.replace(r"/", "-")
+                filename_variable = variable.replace(r"/", "-")
                 # fig.savefig(r'{}/{}.png'.format(path_to_plots, variable), dpi=300)
-                save_png_encoded(r'{}/{}.png'.format(path_to_plots, variable), fig)
+                save_png_encoded(r'{}/{}.png'.format(path_to_plots, filename_variable), fig)
                 plt.close()
-        
+
         if save_residuals and self.save_datasets:
             if path_to_residual_dataset is None: path_to_residual_dataset = r"{}/Datasets/residuals.csv".format(self.saved_directory)
             clean_training_data.to_csv(path_to_residual_dataset)
