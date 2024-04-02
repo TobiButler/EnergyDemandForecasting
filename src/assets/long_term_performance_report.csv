@@ -1,3 +1,3 @@
 ,MSE,Weighted MSE,MAE,MAPE,Wilcoxon Test p-value
-Forecasting Pipeline,283636.1,243416.34,364.58,0.06,0.0
-Baseline Yearly MA,1008851.94,1008851.94,762.95,0.14,
+Forecasting Pipeline,289065.7,247292.94,364.55,0.07,0.0
+Baseline Yearly MA,834403.82,834403.82,685.2,0.13,
