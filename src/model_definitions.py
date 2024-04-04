@@ -33,16 +33,21 @@ A class representing a probabilistic forecasting model. It fits basic statistica
     both point forecasts and their squared errors.
 """
 class Forecaster():
-    def __init__(self) -> None:
+    def __init__(self, short_term_horizon:int=24) -> None:
         """
         Parameters:
         ------------
         """
+        # Prophet-VAR model attributes
         self.point_prophet_model = None
         self.point_var_model = None
         self.error_prophet_model = None
         self.error_var_model = None
         self.error_trend = None
+
+        # lstm related attributes
+        self.short_term_horizon = short_term_horizon
+        self.lstm = None
 
 
 
@@ -52,8 +57,8 @@ class Forecaster():
     """
     def fit(self, clean_training_data:pd.DataFrame, dependent_variable:str, strong_predictors:list=[], 
             hyperparameters:dict=dict(changepoint_prior_scale=0.001, seasonality_prior_scale=0.01, 
-            point_var_lags=10, minimum_error_prediction=None, error_trend=1e-4
-        ), **kwargs):
+            point_var_lags=10, minimum_error_prediction=None, error_trend=1e-4, lr=0.0005, dropout=0.5,
+            batch_size=100, sequence_length=3*7*24, patience=4, loss_scalar=1e4), **kwargs):
         """
         Parameters:
         ----------
@@ -72,7 +77,25 @@ class Forecaster():
 
         # fit point forecasting VAR model
         squared_errors = self._fit_point_var(residuals=residuals, dependent_variable=dependent_variable, strong_predictors=strong_predictors)
+
+        # fit variance forecasting Prophet model
         self._fit_error_forecaster(dependent_variable=dependent_variable, squared_errors=squared_errors, **hyperparameters)
+
+        # fit lstm model
+        self._
+
+
+    """
+    This is a private method that fits a short-term LSTM model using all variables in the dataset provided. The forecasting horizon that the LSTM 
+        is trained to predict is a class attribute.
+    """
+    def _fit_lstm(self, clean_training_data:pd.DataFrame, dependent_variable:str, lr:float=0.0005, dropout=0.5,
+        batch_size=100, sequence_length=3*7*24, patience=4, loss_scalar=1e4, **kwargs):
+        """
+        
+        """
+        pass
+        self.lstm = None
 
 
     """
@@ -271,7 +294,7 @@ class Forecaster():
     This method makes probabilistic forecasts into the future. The model is required to be fit first. It returns 
         both a series of point forecasts and a series of variance forecasts.
     """
-    def predict(self, hours_ahead:int):
+    def long_term_predict(self, hours_ahead:int):
         """
         Parameters:
         ----------
@@ -318,12 +341,11 @@ class Forecaster():
 
     """
     This method is used for making predictions on evaluation data while updating the model after a given number of time-steps. 
-        In this way, we can apecifically evaluate the model's ability to make N hours ahead forecasts, where N is a provided 
-        argument. The default predict method calculates all predictions together without updating the model using actual 
-        observations along the way. This method can be used to compare the performance of a fit Forecaster object with day-ahead 
-        forecasts from the EIA.
+        In this way, we can specifically evaluate the model's ability to make forecasts N hours ahead, where N is a class attribute 
+        defined during class instantiation. It is required that a LSTM model has been fit since the short-term forecasts rely heavily 
+        on the LSTM. This method can be used to compare the performance of a fit Forecaster object with day-ahead forecasts from the EIA.
     """
-    def predict_with_updates(hours_ahead:int, evaluation_residuals:pd.DataFrame, forecast_horizon_hours:int):
+    def short_term_predict(hours_ahead:int, evaluation_residuals:pd.DataFrame, forecast_horizon_hours:int):
         """
         TODO
         """
@@ -332,9 +354,10 @@ class Forecaster():
 
 
     """
-    This method takes data and a set of hyperparameters and conducts rolling cross-validation using MSE and weighted MSE metrics.
+    This method takes data and a set of hyperparameters and conducts rolling cross-validation  on a Prophet-VAR ensemble using MSE and weighted MSE metrics. 
+        This method does not cross validate an lstm model. See cross_validate_lstm() for that.
     """
-    def cross_validate(self, num_folds:int, clean_training_data:pd.DataFrame, dependent_variable:str, hyperparameters:dict,
+    def cross_validate_pv(self, num_folds:int, clean_training_data:pd.DataFrame, dependent_variable:str, pv_hyperparameters:dict=None,
         strong_predictors:list[str]=[], return_predictions:bool=False):
         """
         Parameters:
@@ -347,7 +370,9 @@ class Forecaster():
         
         dependent_variable (str): The name of the dependent variable that will be predicted.
 
-        hyperparameters (dict): a set of hyperparameters used to fit the model
+        cv_hyperparameters (dict): a set of hyperparameters used to fit a Prophet-VAR combined model
+
+        lstm_hyperparameters (dict): a set of hyperparamters used to fit a LSTM model
 
         strong_predictors (list): A list of variables to keep separate from the PCA dimensionality reduction 
             applied prior to fitting the model.
@@ -379,7 +404,7 @@ class Forecaster():
 
             # fit model on the train_data
             self.fit(clean_training_data=train_data, dependent_variable=dependent_variable, 
-                strong_predictors=strong_predictors, hyperparameters=hyperparameters)
+                strong_predictors=strong_predictors, hyperparameters=pv_hyperparameters)
             
             point_forecasts, error_forecasts = self.predict(test_data.shape[0])
 
@@ -411,7 +436,8 @@ class Forecaster():
     This method takes a list of hyperparameter sets and evaluates each using cross-validation.
     """
     def tune_hyperparameters(self, clean_training_data:pd.DataFrame, dependent_variable:str, 
-        hyperparameter_sets:list[dict], num_cv_folds:int=5, strong_predictors:list[str]=[]):
+        pv_hyperparameter_sets:list[dict]=None, lstm_hyperparameter_sets:list[dict]=None, num_cv_folds:int=5, 
+        strong_predictors:list[str]=[]):
         """
         Parameters:
         ----------
