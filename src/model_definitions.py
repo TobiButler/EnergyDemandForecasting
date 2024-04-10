@@ -346,7 +346,7 @@ class Forecaster():
     This method makes probabilistic forecasts into the future. The model is required to be fit first. It returns 
         both a series of point forecasts and a series of variance forecasts.
     """
-    def long_term_predict(self, hours_ahead:int):
+    def long_term_predict(self, hours_ahead:int): # also want to add option to provide start time and previous observations so that the model can predict at any time.
         """
         Parameters:
         ----------
@@ -626,19 +626,19 @@ class Forecaster():
         K is the number of variables in the original dataset, and T is the number of added time encodings (current hard coded to 3). It returns DataLoaders and the 
         normalization factors needed to reproduce the original data.
     """
-    def format_lstm_data(self, df:pd.DataFrame, sequence_length:int, batch_size:int, forecasting_steps_ahead:int, proportion_validation:float=0, input_scaling:tuple=None, input_time_scaling:tuple=None):
+    def format_lstm_data(self, clean_data:pd.DataFrame, sequence_length:int, batch_size:int, forecasting_steps_ahead:int, proportion_validation:float=0, input_scaling:tuple=None, input_time_scaling:tuple=None):
         """
         Parameters:
         df (pd.DataFrame): a dataframe with all variables to be included in the model. Should not contain time embeddings. Must have a datetime-like index.
         
         sequence_length
         """
-        if not pd.api.types.is_datetime64_ns_dtype(df.index.dtype):
-            df.index = pd.to_datetime(df.index)
+        if not pd.api.types.is_datetime64_ns_dtype(clean_data.index.dtype):
+            clean_data.index = pd.to_datetime(clean_data.index)
 
         # encode hour of the day, day of the week, and day of the year into a new dataframe
-        input_time = pd.DataFrame(data={"Hour of Day":input_data.index.hour, "Day of Week":input_data.index.dayofweek, "Day of Year":input_data.index.dayofyear}, index=input_data.index)
-        input_data = pd.get_dummies(input_data, drop_first=True).astype("float32")
+        input_time = pd.DataFrame(data={"Hour of Day":clean_data.index.hour, "Day of Week":clean_data.index.dayofweek, "Day of Year":clean_data.index.dayofyear}, index=clean_data.index)
+        input_data = pd.get_dummies(clean_data, drop_first=True).astype("float32")
 
         # calculate normalization factors. Also save these as they will be used later to transform output back to actual values.
         if input_scaling is None:
@@ -658,15 +658,14 @@ class Forecaster():
         input_data = (input_data - input_min_vals) / (input_max_vals - input_min_vals)
         input_time = (input_time - input_time_min_vals) / (input_time_max_vals - input_time_min_vals)
 
+        x = input_data.values
+        x_time = input_time.values
+
         # format the dataset
         K = input_data.shape[1]  # Number of features
 
         # Calculate the number of sequences of length S that can be produced
-        num_sequences = input_data.shape[0] - (sequence_length + forecasting_steps_ahead)
-
-        # Reshape data to have dimensions (N x B x S x K)
-        x_reg = input_data.values # predictor variables
-        x_time = input_time.values # time encoding
+        num_sequences = x.shape[0] - (sequence_length + forecasting_steps_ahead)
 
         # Initialize an empty list to store the groups
         x_inputs = []
@@ -675,9 +674,10 @@ class Forecaster():
 
         # Iterate over the array to create groups
         for i in range(num_sequences):
-            input = x_reg[i:i+sequence_length]
+            input = x[i:i+sequence_length]
             time_input = x_time[i:i+sequence_length]
-            output = x_reg[i+sequence_length+forecasting_steps_ahead-1]
+            # output = y[i+S]
+            output = x[i+sequence_length+forecasting_steps_ahead-1,0]
             x_inputs.append(input)
             y_outputs.append(output)
             x_time_inputs.append(time_input)
@@ -707,10 +707,12 @@ class Forecaster():
     """
     
     """
-    def fit_lstm(self, model:LSTM, train_loader, val_loader:t.utils.data.DataLoader=None, device:str="cpu", lr:float=0.0005, dropout:float=0.1, 
+    def fit_lstm(self, model:LSTM, train_loader, val_loader:t.utils.data.DataLoader=None, lr:float=0.0005, dropout:float=0.1, 
     patience:int=5, weight_decay:float=0, num_epochs:int=100, verbose:bool=False, loss_scalar:int=1000, **kwargs):
+        # define device as whatever device the model in on
+        device = next(model.parameters()).device
         # define optimizer
-        criterion = t.nn.MSELoss(reduction="none")
+        criterion = t.nn.MSELoss()
         optimizer = t.optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
 
         if val_loader is not None: # using early stopping validation
@@ -726,7 +728,7 @@ class Forecaster():
                 targets = targets.to(device=device)
 
                 # evaluate model
-                outputs = model(inputs, time_inputs, bayesian_predict=True)
+                outputs = model(inputs, time_inputs, bayesian_predict=True)[:,0]
 
                 # apply autograd
                 optimizer.zero_grad()
@@ -740,13 +742,13 @@ class Forecaster():
                         params = []
                         gradients = []
                         for name, param in model.named_parameters():
-                            params.append(param)
+                            params.append(param.view(-1).detach())
                             if param.grad is not None:
-                                gradients.append(param.grad)
-                        params = t.cat(params)
-                        gradients = t.cat(gradients)
-                        print("Average Parameter Value: {:.5f}".format(np.mean(params.cpu().numpy())))
-                        print("Average Parameter Value: {:.5f}".format(np.mean(gradients.cpu().numpy())))
+                                gradients.append(param.grad.view(-1).detach())
+                        params = t.abs(t.cat(params))
+                        gradients = t.abs(t.cat(gradients))
+                        print("Average Parameter Absolute Value: {:.5f}".format(np.mean(params.cpu().numpy())))
+                        print("Average Gradient Absolute Value: {:.5f}".format(np.mean(gradients.cpu().numpy())))
 
                 optimizer.step()
             losses = np.mean(losses)

@@ -22,7 +22,10 @@ import os
 """
 This main function takes starting date and ending date and retrieves data related to energy demand between those dates.
 """
-def main(start:str, end:str, eia_api_key:str=None, path_to_directory:str=None):
+def main(start:str, end:str, eia_api_key:str=None, path_to_directory:str=None, save_dataset:bool=True):
+    """
+    
+    """
     # create directory to hold datasets
     if path_to_directory is None: path_to_directory = r"Saved"
     if not os.path.exists(path_to_directory):
@@ -36,10 +39,12 @@ def main(start:str, end:str, eia_api_key:str=None, path_to_directory:str=None):
 
     all_data = combine_data(start=start, end=end, eia_api_key=eia_api_key)
 
-    path_to_save = r"{}/Datasets/preliminary.csv".format(path_to_directory)
-    print("All data loaded successfully. Saving preliminary dataset to {}".format(path_to_save))
-    all_data.to_csv(path_to_save)
-    print("Preliminary dataset saved.")
+    if save_dataset:
+        path_to_save = r"{}/Datasets/preliminary.csv".format(path_to_directory)
+        print("All data loaded successfully. Saving preliminary dataset to {}".format(path_to_save))
+        all_data.to_csv(path_to_save)
+        print("Preliminary dataset saved.")
+    return all_data
 
 
 """
