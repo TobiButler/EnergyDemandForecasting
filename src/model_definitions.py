@@ -20,6 +20,7 @@ from sklearn.preprocessing import StandardScaler
 import pickle as pkl
 from sklearn.model_selection import TimeSeriesSplit
 import torch as t
+from copy import deepcopy
 
 # prevent logging when fitting Prophet models
 import logging
@@ -33,7 +34,7 @@ class LSTM(t.nn.Module):
     Constructor for the LSTM class. Currently, the general architecture of this class cannot be adjusted from outside of it. 
         The only adjustable attributes are the network's input size, hidden state size, number of layers, output size, and dropout.
     """
-    def __init__(self, input_size, hidden_size, num_layers, output_size, dropout:float = 0, **kwargs):
+    def __init__(self, input_size, hidden_size, num_layers, output_size, training_sequence_length:int, dropout:float = 0, **kwargs):
         super(LSTM, self).__init__()
         self.hidden_size = hidden_size
         self.num_layers = num_layers
@@ -48,6 +49,9 @@ class LSTM(t.nn.Module):
         ) 
         self.c0 = None
         self.h0 = None
+        self.training_sequence_length = training_sequence_length
+        self.input_scaling = None
+        self.input_time_scaling = None
 
     """
     This method runs the network. It evaluates the network as a function to a batch of input samples with size 
@@ -72,11 +76,12 @@ class LSTM(t.nn.Module):
     """
     
     """
-    def predict_variance(self, x_observed, x_time, n:int):
-        x_observed = x_observed.repeat(n)
-        x_time = x_time.repeat(n)
+    def predict_variance(self, x_observed, x_time, n:int=100):
+        dims = [1]*x_observed.dim()
+        x_observed = x_observed.repeat(n, *dims)
+        x_time = x_time.repeat(n, *dims)
         predictions = self.forward(x_observed, x_time, bayesian_predict=True)
-        return t.std(predictions).item()
+        return t.var(predictions).item()
     
 
 
@@ -100,6 +105,8 @@ class Forecaster():
         # lstm related attributes
         self.short_term_horizon = short_term_horizon
         self.lstm = None
+        self.dependent_variable = None
+        self.predictor_variables = None
 
 
 
@@ -397,11 +404,82 @@ class Forecaster():
         defined during class instantiation. It is required that a LSTM model has been fit since the short-term forecasts rely heavily 
         on the LSTM. This method can be used to compare the performance of a fit Forecaster object with day-ahead forecasts from the EIA.
     """
-    def short_term_predict(hours_ahead:int, evaluation_residuals:pd.DataFrame, forecast_horizon_hours:int):
+    def short_term_predict(self, input_data:pd.DataFrame, expected_output_size:int, lstm_sequence_length:int=None, ensemble_weights:dict={"Prophet-VAR":0, "LSTM":1}):
         """
-        TODO
+        Parameters:
+        ----------
+        input_data (pandas.DataFrame): a dataframe containing the same variables and datetime index as that used to fit the Prophet-VAR model and the LSTM. 
+            Depending on the value of "pv_lstm_weights" passed, it may be necessary for this model to contain at least as many observations as the sequence 
+            length used as input to this object's VAR model and LSTM. The order of columns in this dataframe must match the order of columns used to train the models.
+        
+        expected_output_size (int): The number of short-term predictions the user is expecting to obtain from this method. This argument is included as a 
+            check that the user understands how short-term predictions are being made and how many initial observations are required before any forecasts can 
+            start to be made.
+
+        pv_lstm_weights (dict): determines how to weight the Prophet-VAR and LSTM models when using them as an ensemble to produce short-term predictions.
+            If any model's weight is set to 0, it will not be used to make short-term predictions.
+            
+        Returns:
+        ----------
+
         """
-        day_ahead_forecasts = []
+        # check that columns match what was used to train the models
+        if list(input_data.columns) != ([self.dependent_variable] + self.predictor_variables):
+            raise AttributeError("The names and order of the columns provided in the input dataset do not match those used to train the LSTM model. " \
+                "Please ensure that the input dataset matches that used to train the LSTM model ")
+
+        # define datetime index for the predictions being made
+        prediction_index = input_data.index[lstm_sequence_length+self.short_term_horizon:]
+
+        # prediction placeholders
+        ensemble_point_forecasts = 0
+        ensemble_error_forecasts = 0
+
+        # make predictions using the Prophet-VAR model 
+        if ensemble_weights["Prophet-VAR"] > 0:
+            if self.point_var_model is None: raise AttributeError("Must fit a Prophet-VAR model before it can be used to make short-term predictions.")
+
+        # make predictions using the LSTM model
+        if ensemble_weights["LSTM"] > 0:
+            if self.lstm is None: raise AttributeError("Must fit an LSTM model before it can be used to make short-term predictions.")
+
+            # format input data for LSTM
+            if lstm_sequence_length is None: lstm_sequence_length = self.lstm.training_sequence_length
+            loader = self.format_lstm_data(input_data, sequence_length=lstm_sequence_length, batch_size=input_data.shape-lstm_sequence_length, 
+                forecasting_steps_ahead=self.short_term_horizon, proportion_validation=0)
+            with t.no_grad():
+                inputs, time_inputs = [],[]
+                for inputs, time_inputs, _ in loader:
+                    inputs.append(inputs)
+                    time_inputs.append(time_inputs)
+                inputs = t.cat(inputs)
+                time_inputs = t.cat(time_inputs)
+
+            
+            # make short-term predictions
+            point_forecasts = (self.lstm(inputs, time_inputs)[:,0].cpu().numpy() * 
+                    (self.lstm.input_scaling[1][self.dependent_variable]-self.lstm.input_scaling[0][self.dependent_variable]) + self.lstm.input_scaling[0][self.dependent_variable])
+
+            # predict error variances
+            error_forecasts = []
+            for input, time_input in zip(inputs, time_inputs):
+                error_forecast = (self.lstm.predict_variance(input, time_input) * 
+                (self.lstm.input_scaling[1][self.dependent_variable]-self.lstm.input_scaling[0][self.dependent_variable]) + self.lstm.input_scaling[0][self.dependent_variable])
+                error_forecasts.append(error_forecast)
+            error_forecasts = np.array(error_forecasts)
+
+            # weight by ensemble weight
+            ensemble_point_forecasts = ensemble_point_forecasts + ensemble_weights["LSTM"]*point_forecasts
+            ensemble_error_forecasts = ensemble_error_forecasts + ensemble_weights["LSTM"]*error_forecast
+
+        
+        # Divide forecasts by the sum of all ensemble weights (in case they do not sum to 1)
+        weights_sum = sum(list(ensemble_weights.values))
+        ensemble_point_forecasts = ensemble_point_forecasts / weights_sum
+        ensemble_error_forecasts = ensemble_error_forecasts / weights_sum
+
+        return pd.DataFrame(index=prediction_index, data={"Point Forecast":ensemble_point_forecasts, "Variance Forecast":ensemble_error_forecasts})
+
 
 
 
@@ -488,17 +566,14 @@ class Forecaster():
     This method takes a clean dataset and a set of hyperparameters and conducts rolling cross-validation of a LSTM network using the hyperparamters 
         provided and using MSE and weighted MSE metrics. This method does not cross validate an Prophet-VAR model. See cross_validate_pf() for that.
     """
-    def cross_validate_lstm(self, num_folds:int, clean_training_data:pd.DataFrame, dependent_variable:str, batch_size:int, sequence_length:int, 
+    def cross_validate_lstm(self, num_folds:int, clean_training_data:pd.DataFrame, dependent_variable:str, 
         forecasting_steps_ahead:int, lstm_hyperparameters:dict=None, early_stopping_prop:float=0.1, device:str="cpu", strong_predictors:list[str]=[], 
-        return_predictions:bool=False):
+        return_predictions:bool=False, verbose_validation:bool=False, verbose_training:bool=False):
         """
         
         """
         # initialize TimeSeriesSplit
         tscv = TimeSeriesSplit(n_splits=num_folds)
-
-        # define input size
-        input_size = clean_training_data.shape[1]
 
         if return_predictions:
             model_predictions=[]
@@ -507,49 +582,79 @@ class Forecaster():
             model_mse_values = []
             model_wmse_values = []
 
+        counter=1
         for train_index, test_index in tscv.split(clean_training_data):
+            if verbose_validation:
+                print("Training Model for CV Fold {} out of {}.".format(counter, num_folds))
             train_data, test_data = clean_training_data.iloc[train_index], clean_training_data.iloc[test_index]
 
             # format training dataset
-            train_loader, val_loader, input_scaling, input_time_scaling = self.format_lstm_data(train_data, sequence_length=sequence_length, batch_size=batch_size, proportion_validation=early_stopping_prop)
+            train_loader, val_loader, input_scaling, input_time_scaling = self.format_lstm_data(train_data, sequence_length=lstm_hyperparameters["sequence_length"], 
+                batch_size=lstm_hyperparameters["batch_size"], forecasting_steps_ahead=forecasting_steps_ahead, proportion_validation=early_stopping_prop)
 
             # format validation dataset
-            validation_loader, _, _, _  = self.format_lstm_data(test_data, sequence_length=sequence_length, batch_size=batch_size, proportion_validation=0)
+            validation_last_train_index = -(lstm_hyperparameters["sequence_length"]+forecasting_steps_ahead)
+            temp_test_data = pd.concat([train_data[validation_last_train_index:], test_data], axis=0) # add last sequence length of the training data to start of validation data
+            # return test_data
+            _, validation_loader, _, _  = self.format_lstm_data(temp_test_data, sequence_length=lstm_hyperparameters["sequence_length"], batch_size=lstm_hyperparameters["batch_size"], 
+                forecasting_steps_ahead=forecasting_steps_ahead, proportion_validation=1, input_scaling=input_scaling, input_time_scaling=input_time_scaling)
+            
+            # define input size
+            input_size = train_loader.dataset[0][0].shape[-1] + train_loader.dataset[0][1].shape[-1]
 
             # define lstm model to be fit/trained
-            model = LSTM(input_size, lstm_hyperparameters["hidden_size"], lstm_hyperparameters["num_layers"], 1, dropout=lstm_hyperparameters["dropout"])
+            model = LSTM(input_size, lstm_hyperparameters["hidden_size"], lstm_hyperparameters["num_layers"], 1, lstm_hyperparameters["sequence_length"], dropout=lstm_hyperparameters["dropout"])
+            # return train_loader, val_loader
             
             # fit the lstm using the data and hyperparameters provided
-            self.fit_lstm(model=model, train_loader=train_loader, val_loader=val_loader, device=device, **lstm_hyperparameters)
+            model = self.fit_lstm(model=model, train_loader=train_loader, val_loader=val_loader, device=device, **lstm_hyperparameters, verbose=verbose_training, overwrite_class_model=False, 
+                input_scaling=input_scaling, input_time_scaling=input_time_scaling)
             
-            # obtain validation predictions
-            validation_inputs, validation_time_inputs, validation_targets = [],[],[]
-            for inputs, time_inputs, targets in validation_loader:
-                validation_inputs.append(inputs)
-                validation_time_inputs.append(time_inputs)
-                validation_targets = validation_targets.append(targets)
-            validation_inputs = t.cat(validation_inputs)
-            validation_time_inputs = t.cat(validation_time_inputs)
-            validation_targets = t.cat(validation_targets)
-            
-            point_forecasts = model(validation_inputs, validation_time_inputs).cpu().numpy()
-            error_forecasts = np.array([model.predict_variance(input, time_input) for input, time_input in zip(validation_inputs, validation_time_inputs)])
+            with t.no_grad():
+                # obtain validation predictions
+                validation_inputs, validation_time_inputs, validation_targets = [],[],[]
+                for inputs, time_inputs, targets in validation_loader:
+                    validation_inputs.append(inputs)
+                    validation_time_inputs.append(time_inputs)
+                    validation_targets.append(targets)
+                validation_inputs = t.cat(validation_inputs)
+                validation_time_inputs = t.cat(validation_time_inputs)
+                validation_targets = t.cat(validation_targets)
 
-            if return_predictions:
-                model_predictions.append([point_forecasts, error_forecasts])
-                truth_values.append(validation_targets.cpu().numpy())
-            
-            else:
-                # calculate MSE
-                mse = np.sum((point_forecasts - (test_data[dependent_variable].values))**2)/test_data.shape[0]
+                # return model, validation_inputs, validation_time_inputs, validation_targets
+                
+                # predict point forecast values
+                point_forecasts = (model(validation_inputs, validation_time_inputs)[:,0].cpu().numpy() * 
+                    (input_scaling[1][dependent_variable]-input_scaling[0][dependent_variable]) + input_scaling[0][dependent_variable])
 
-                # calculate weighted MSE
-                relative_confidence = 1/np.sqrt(error_forecasts) # weight by 1 over standard deviation
-                relative_confidence = relative_confidence/np.sum(relative_confidence) * error_forecasts.shape[0] # normalize
-                wmse = np.sum(relative_confidence * (point_forecasts - (test_data[dependent_variable].values))**2)/test_data.shape[0]
+                # predict error variances
+                error_forecasts = []
+                for input, time_input in zip(validation_inputs, validation_time_inputs):
+                    error_forecast = (model.predict_variance(input, time_input) * 
+                        (input_scaling[1][dependent_variable]-input_scaling[0][dependent_variable]) + input_scaling[0][dependent_variable])
+                    error_forecasts.append(error_forecast)
+                error_forecasts = np.array(error_forecasts)
 
-                model_mse_values.append(mse)
-                model_wmse_values.append(wmse)
+                if return_predictions:
+                    model_predictions.append([point_forecasts, error_forecasts])
+                    truth_values.append(validation_targets.cpu().numpy())
+                
+                else:
+                    # calculate MSE
+                    mse = np.sum((point_forecasts - (test_data[dependent_variable].values))**2)/test_data.shape[0]
+
+                    # calculate weighted MSE
+                    relative_confidence = 1/np.sqrt(error_forecasts) # weight by 1 over standard deviation
+                    relative_confidence = relative_confidence/np.sum(relative_confidence) * error_forecasts.shape[0] # normalize
+                    # return model, relative_confidence, point_forecasts, test_data
+                    wmse = np.sum(relative_confidence * (point_forecasts - (test_data[dependent_variable].values))**2)/test_data.shape[0]
+
+                    model_mse_values.append(mse)
+                    model_wmse_values.append(wmse)
+                if verbose_validation:
+                    print("Validation Fold {} out of {}. MSE: {}, WMSE: {}.".format(counter, num_folds, mse, wmse))
+
+                counter = counter + 1
 
         if return_predictions:
             return model_predictions, truth_values
@@ -626,7 +731,8 @@ class Forecaster():
         K is the number of variables in the original dataset, and T is the number of added time encodings (current hard coded to 3). It returns DataLoaders and the 
         normalization factors needed to reproduce the original data.
     """
-    def format_lstm_data(self, clean_data:pd.DataFrame, sequence_length:int, batch_size:int, forecasting_steps_ahead:int, proportion_validation:float=0, input_scaling:tuple=None, input_time_scaling:tuple=None):
+    def format_lstm_data(self, clean_data:pd.DataFrame, sequence_length:int, batch_size:int, proportion_validation:float=0, 
+        input_scaling:tuple=None, input_time_scaling:tuple=None, **kwargs):
         """
         Parameters:
         df (pd.DataFrame): a dataframe with all variables to be included in the model. Should not contain time embeddings. Must have a datetime-like index.
@@ -651,8 +757,8 @@ class Forecaster():
             input_time_min_vals = np.min(input_time, axis=0)
             input_time_max_vals = np.max(input_time, axis=0)
         else:
-            input_time_min_vals = input_scaling[0]
-            input_time_max_vals = input_scaling[1]
+            input_time_min_vals = input_time_scaling[0]
+            input_time_max_vals = input_time_scaling[1]
 
         # Apply normalization to put all variables in the range [0, 1]. This helps the model learn equally from them all.
         input_data = (input_data - input_min_vals) / (input_max_vals - input_min_vals)
@@ -665,7 +771,7 @@ class Forecaster():
         K = input_data.shape[1]  # Number of features
 
         # Calculate the number of sequences of length S that can be produced
-        num_sequences = x.shape[0] - (sequence_length + forecasting_steps_ahead)
+        num_sequences = x.shape[0] - (sequence_length + self.short_term_horizon)
 
         # Initialize an empty list to store the groups
         x_inputs = []
@@ -676,8 +782,7 @@ class Forecaster():
         for i in range(num_sequences):
             input = x[i:i+sequence_length]
             time_input = x_time[i:i+sequence_length]
-            # output = y[i+S]
-            output = x[i+sequence_length+forecasting_steps_ahead-1,0]
+            output = x[i+sequence_length+self.short_term_horizon-1,0]
             x_inputs.append(input)
             y_outputs.append(output)
             x_time_inputs.append(time_input)
@@ -688,7 +793,7 @@ class Forecaster():
         y_outputs = t.Tensor(np.array(y_outputs))
 
         if proportion_validation > 0: 
-            validation_size = int(np.floor(x_inputs.shape[0]*0.1))
+            validation_size = int(np.floor(x_inputs.shape[0]*proportion_validation))
             # define train_loader for training the model
             train_dataset = t.utils.data.TensorDataset(x_inputs[:-validation_size], x_time_inputs[:-validation_size], y_outputs[:-validation_size])
             train_loader = t.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=False)
@@ -701,16 +806,21 @@ class Forecaster():
             train_loader = t.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=False)
             validation_loader = None
 
-        return train_loader, validation_loader, (input_max_vals, input_min_vals), (input_time_max_vals, input_time_min_vals)
+        return train_loader, validation_loader, (input_min_vals, input_max_vals), (input_time_min_vals, input_time_max_vals)
     
 
     """
     
     """
-    def fit_lstm(self, model:LSTM, train_loader, val_loader:t.utils.data.DataLoader=None, lr:float=0.0005, dropout:float=0.1, 
-    patience:int=5, weight_decay:float=0, num_epochs:int=100, verbose:bool=False, loss_scalar:int=1000, **kwargs):
-        # define device as whatever device the model in on
+    def fit_lstm(self, model:LSTM, train_loader:t.utils.data.DataLoader, val_loader:t.utils.data.DataLoader=None, lr:float=0.0005, dropout:float=0.1, 
+        patience:int=5, weight_decay:float=0, num_epochs:int=100, verbose:bool=False, loss_scalar:int=1000, overwrite_class_model:bool=True, 
+        input_scaling=None, input_time_scaling=None, **kwargs):
+        # copy model to avoid overwriting
+        model = deepcopy(model)
+
+        # define pytorch device as whatever device the model in on
         device = next(model.parameters()).device
+
         # define optimizer
         criterion = t.nn.MSELoss()
         optimizer = t.optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
@@ -767,7 +877,8 @@ class Forecaster():
                         loss = criterion(targets, outputs) * loss_scalar
                         val_loss.append(loss.item())
                     val_loss = np.mean(val_loss)
-                    print("Epoch {}, Validation Loss: {}".format(epoch+1, val_loss.item()))
+                    if verbose:
+                        print("Epoch {}, Validation Loss: {}".format(epoch+1, val_loss.item()))
 
                 # Check for improvement in validation loss
                 if val_loss < best_val_loss:
@@ -778,13 +889,39 @@ class Forecaster():
                 else:
                     counter += 1
                     if counter >= patience:
-                        print("Early stopping!")
+                        if verbose: print("Early stopping!")
                         break
 
         # Restore the best performing model
         if best_model_state is not None:
             model.load_state_dict(best_model_state)
-        self.lstm = model
+        
+        # save scaling information to the model
+        model.input_scaling = input_scaling
+        model.input_time_scaling = input_time_scaling
+
+        # save model to Forecaster class
+        if overwrite_class_model:
+            self.lstm = model
+            self.dependent_variable = input_scaling[0].iloc[0]
+            self.predictor_variables = input_scaling[0].iloc[1:]
+
         return model
+
+    """
+    
+    """
+    def format_fit_lstm(self, clean_data, sequence_length:int=10, batch_size:int=10, proportion_validation=0.1, lstm_device:str="cpu", overwrite_class_model:bool=True, **kwargs):
+        # format the data for lstm training
+        train_loader, val_loader, input_scaling, input_time_scaling = self.format_lstm_data(clean_data, sequence_length, batch_size, proportion_validation, **kwargs)
+
+        # define the LSTM model
+        lstm = LSTM(input_size=train_loader.dataset[0][0].shape[-1]+train_loader.dataset[0][1].shape[-1], output_size=1, training_sequence_length=sequence_length, **kwargs).to(device=lstm_device)
+
+        # fit the LSTM model
+        self.fit_lstm(lstm, train_loader=train_loader, val_loader=val_loader, input_scaling=input_scaling, input_time_scaling=input_time_scaling, 
+            device=lstm_device, overwrite_class_model=overwrite_class_model, verbose=True, **kwargs)
+
+        return lstm
 
 
