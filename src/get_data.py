@@ -34,12 +34,12 @@ def main(start, end, eia_api_key:str=None, path_to_directory:str=None, save_data
     if type(start) != np.datetime64:
         try:
             start = np.datetime64(start)
-        except TypeError:
+        except (TypeError, ValueError):
             raise SystemExit("The start time provided must be a string or numpy.datetime64 object")
     if type(end) != np.datetime64:
         try:
             end = np.datetime64(end)
-        except TypeError:
+        except (TypeError, ValueError):
             raise SystemExit("The end time provided must be a string or numpy.datetime64 object")
         
     # check that start and end dates are not too extreme:

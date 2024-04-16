@@ -14,6 +14,7 @@ Still to do:
 import pandas as pd
 import numpy as np
 from prophet import Prophet
+import datetime
 from statsmodels.tsa.api import VAR
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
@@ -21,6 +22,7 @@ import pickle as pkl
 from sklearn.model_selection import TimeSeriesSplit
 import torch as t
 from copy import deepcopy
+import warnings
 
 # prevent logging when fitting Prophet models
 import logging
@@ -116,8 +118,9 @@ class Forecaster():
     """
     def fit(self, clean_training_data:pd.DataFrame, dependent_variable:str, strong_predictors:list=[], 
             hyperparameters:dict=dict(changepoint_prior_scale=0.001, seasonality_prior_scale=0.01, 
-            point_var_lags=10, minimum_error_prediction=None, error_trend=1e-4, lr=0.0005, dropout=0.5,
-            batch_size=100, sequence_length=3*7*24, patience=4, loss_scalar=1e4), **kwargs):
+            point_var_lags=10, minimum_error_prediction=None, error_trend=1e-4, lr=0.0005, dropout=0.1,
+            batch_size=100, sequence_length=3*7*24, patience=4, loss_scalar=1e4), lstm_device:str="cpu", 
+            verbose:bool=True, **kwargs):
         """
         Parameters:
         ----------
@@ -132,6 +135,7 @@ class Forecaster():
         hyperparameters (dict): all optional hyperparamters for the model (see method definition for default values)
         """
         # fit point forecasting Prophet models 
+        print("Fitting Prophet-VAR Model")
         residuals = self._fit_prophet_models(clean_training_data=clean_training_data, dependent_variable=dependent_variable, **hyperparameters)
 
         # fit point forecasting VAR model
@@ -139,9 +143,9 @@ class Forecaster():
 
         # fit variance forecasting Prophet model
         self._fit_error_forecaster(dependent_variable=dependent_variable, squared_errors=squared_errors, **hyperparameters)
-
         # fit lstm model
-        self._
+        print("Fitting LSTM Model")
+        lstm = self.format_fit_lstm(clean_training_data, proportion_validation=0.1, lstm_device=lstm_device, verbose=verbose, **hyperparameters)
 
 
     """
@@ -260,9 +264,11 @@ class Forecaster():
         # combine primary variables with transformed dataset
         endogenous_data = pd.concat([not_pca_data, orthogonal_data], axis=1)
 
-        # Fit VAR model
-        point_var_model = VAR(endogenous_data)
-        point_var_result = point_var_model.fit()
+        # Fit VAR model (ignoring warnings because I cannot figure out how to prevent a ValueWarning.)
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", category=UserWarning)
+            point_var_model = VAR(endogenous_data, freq=datetime.timedelta(hours=1))
+            point_var_result = point_var_model.fit()
         self.point_var_model = point_var_result
         self.point_var_context = endogenous_data.values[-point_var_result.k_ar:]
 
@@ -320,9 +326,8 @@ class Forecaster():
                 # save squared error prophet model as class attribute for making predictions
                 if variable == dependent_variable: 
                     self.error_prophet_model = error_model
-
             # fit VAR model on the residuals of the squared error prophet models
-            error_var_model = VAR(error_residuals)
+            error_var_model = VAR(error_residuals, freq=datetime.timedelta(hours=1))
             error_var_result = error_var_model.fit()
             self.error_var_model = error_var_result
             self.error_var_context = error_residuals.values[-error_var_result.k_ar:]
@@ -365,6 +370,9 @@ class Forecaster():
 
         pandas.Series: Predicted variance (float) for each point forecast with time as index (datetime64[ns])
         """
+        # hours_ahead must be positive
+        if (hours_ahead <= 0) or (hours_ahead % 1 > 0): raise SystemExit("The argument \"hours_ahead\" must be a positive integer.")
+        
         # predict with point forecasting prophet model
         if self.point_prophet_model is not None:
             df = self.point_prophet_model.make_future_dataframe(periods=hours_ahead, freq="H")
@@ -395,7 +403,8 @@ class Forecaster():
         error_trend = np.cumsum(np.ones(error_forecasts.shape[0]) * self.error_trend)
         error_forecasts = error_forecasts + error_trend
 
-        return point_prophet_forecasts + point_var_forecasts, error_forecasts
+        return pd.DataFrame(index=point_prophet_forecasts.index, data={"Point Forecasts":point_prophet_forecasts + point_var_forecasts, 
+            "Variance Forecasts": error_forecasts})
     
 
     """
@@ -424,9 +433,9 @@ class Forecaster():
 
         """
         # check that columns match what was used to train the models
-        if list(input_data.columns) != ([self.dependent_variable] + self.predictor_variables):
-            raise AttributeError("The names and order of the columns provided in the input dataset do not match those used to train the LSTM model. " \
-                "Please ensure that the input dataset matches that used to train the LSTM model ")
+        if list(pd.get_dummies(input_data, drop_first=True).columns) != ([self.dependent_variable] + list(self.predictor_variables)):
+            raise SystemExit("The names and order of the columns provided in the input dataset do not match those used to train the LSTM model. " \
+                "Please ensure that the input dataset matches that used to train the LSTM model.")
 
         # define datetime index for the predictions being made
         prediction_index = input_data.index[lstm_sequence_length+self.short_term_horizon:]
@@ -436,8 +445,48 @@ class Forecaster():
         ensemble_error_forecasts = 0
 
         # make predictions using the Prophet-VAR model 
+        # HERE: TODO: Need to save all prophet models and principal components during PV fitting and create a pipeline that 
+        # goes from clean input data to transformed residuals that can be used by the VAR model.
         if ensemble_weights["Prophet-VAR"] > 0:
             if self.point_var_model is None: raise AttributeError("Must fit a Prophet-VAR model before it can be used to make short-term predictions.")
+            # predict using Prophet point forecaster
+            prophet_df = pd.DataFrame({'ds': input_data.index})
+            point_prophet_forecasts = self.point_prophet_model.predict(prophet_df)[["ds", "yhat"]].set_index("ds")
+            point_prophet_forecasts = point_prophet_forecasts["yhat"].iloc[lstm_sequence_length:] # should match expected_output_size
+
+            # predict with squared error forecasting Prophet model
+            if self.error_prophet_model is not None:
+                error_prophet_forecasts = self.error_prophet_model.predict(prophet_df)[["ds", "yhat"]].set_index("ds")
+                error_prophet_forecasts = error_prophet_forecasts["yhat"].iloc[lstm_sequence_length:]
+                error_forecasts = error_prophet_forecasts
+
+            ### predict using VAR model ###
+
+            # apply function to get transformed residuals for point forecasting VAR
+            # point_var_df = self....
+
+            # apply function to get transformed residuals for error forecasting VAR
+            # error_var_df = self....
+
+            # predict with point forecasting VAR model
+            # if self.point_var_model is not None:
+            #     point_var_forecasts = self.point_var_model.forecast(point_var_context, steps=self.short_term_horizon)[:,0]
+            
+
+            # predict with squared error forecasting VAR model
+            # if self.error_var_model is not None:
+            #     error_var_forecasts = self.error_var_model.forecast(error_var_context, steps=self.short_term_horizon)[:,0]
+            #     error_forecasts = error_forecasts + error_var_forecasts
+
+            error_forecasts = np.maximum(self.min_squared_error, error_forecasts) # set minimum squared error
+
+            # add trend to error forecasts
+            error_trend = np.cumsum(np.ones(error_forecasts.shape[0]) * self.error_trend)
+            error_forecasts = error_forecasts + error_trend
+
+            # return point_prophet_forecasts + point_var_forecasts, error_forecasts
+
+            
 
         # make predictions using the LSTM model
         if ensemble_weights["LSTM"] > 0:
@@ -445,36 +494,41 @@ class Forecaster():
 
             # format input data for LSTM
             if lstm_sequence_length is None: lstm_sequence_length = self.lstm.training_sequence_length
-            loader = self.format_lstm_data(input_data, sequence_length=lstm_sequence_length, batch_size=input_data.shape-lstm_sequence_length, 
+            loader, _, _, _ = self.format_lstm_data(input_data, sequence_length=lstm_sequence_length, batch_size=input_data.shape[0]-lstm_sequence_length, 
                 forecasting_steps_ahead=self.short_term_horizon, proportion_validation=0)
             with t.no_grad():
                 inputs, time_inputs = [],[]
-                for inputs, time_inputs, _ in loader:
-                    inputs.append(inputs)
-                    time_inputs.append(time_inputs)
+                for input, time_input, _ in loader:
+                    inputs.append(input)
+                    time_inputs.append(time_input)
                 inputs = t.cat(inputs)
                 time_inputs = t.cat(time_inputs)
 
-            
-            # make short-term predictions
-            point_forecasts = (self.lstm(inputs, time_inputs)[:,0].cpu().numpy() * 
-                    (self.lstm.input_scaling[1][self.dependent_variable]-self.lstm.input_scaling[0][self.dependent_variable]) + self.lstm.input_scaling[0][self.dependent_variable])
+                # put input onto same device as the model
+                device = next(self.lstm.parameters()).device
+                inputs = inputs.to(device=device)
+                time_inputs = time_inputs.to(device=device)
+                
+                # make short-term predictions
+                point_forecasts = (self.lstm(inputs, time_inputs)[:,0].cpu().numpy() * 
+                        (self.lstm.input_scaling[1][self.dependent_variable]-self.lstm.input_scaling[0][self.dependent_variable]) + self.lstm.input_scaling[0][self.dependent_variable])
 
-            # predict error variances
-            error_forecasts = []
-            for input, time_input in zip(inputs, time_inputs):
-                error_forecast = (self.lstm.predict_variance(input, time_input) * 
-                (self.lstm.input_scaling[1][self.dependent_variable]-self.lstm.input_scaling[0][self.dependent_variable]) + self.lstm.input_scaling[0][self.dependent_variable])
-                error_forecasts.append(error_forecast)
-            error_forecasts = np.array(error_forecasts)
+                # predict error variances
+                error_forecasts = []
+                for input, time_input in zip(inputs, time_inputs):
+                    error_forecast = (self.lstm.predict_variance(input, time_input) * 
+                    (self.lstm.input_scaling[1][self.dependent_variable]-self.lstm.input_scaling[0][self.dependent_variable]) + self.lstm.input_scaling[0][self.dependent_variable])
+                    error_forecasts.append(error_forecast)
+                error_forecasts = np.array(error_forecasts)
+                # return error_forecasts
 
             # weight by ensemble weight
             ensemble_point_forecasts = ensemble_point_forecasts + ensemble_weights["LSTM"]*point_forecasts
-            ensemble_error_forecasts = ensemble_error_forecasts + ensemble_weights["LSTM"]*error_forecast
+            ensemble_error_forecasts = ensemble_error_forecasts + ensemble_weights["LSTM"]*error_forecasts
 
         
         # Divide forecasts by the sum of all ensemble weights (in case they do not sum to 1)
-        weights_sum = sum(list(ensemble_weights.values))
+        weights_sum = sum(list(ensemble_weights.values()))
         ensemble_point_forecasts = ensemble_point_forecasts / weights_sum
         ensemble_error_forecasts = ensemble_error_forecasts / weights_sum
 
@@ -714,17 +768,6 @@ class Forecaster():
         return pv_hyperparameter_results, lstm_hyperparameter_results
 
 
-    # TODO:
-    # provide new dataset for observations that have occurred since the model was fit. Does not refit the model.
-    def update_model(self,):
-        pass
-
-
-    # create plotly figure that displays forecasts over the next n hours ahead
-    def plot_future(self, n_hours_ahead:int):
-        pass
-
-
     """
     This method is used to format a dataset for lstm training. It takes a pandas dataframe with columns representing the variables to be included in the model. 
         It then converts the dataset into a Pytorch DataLoader as an iterable of B x S x (K+T) Tensors, where B is the batch size, S is the sequences size (lookback window), 
@@ -813,7 +856,7 @@ class Forecaster():
     
     """
     def fit_lstm(self, model:LSTM, train_loader:t.utils.data.DataLoader, val_loader:t.utils.data.DataLoader=None, lr:float=0.0005, dropout:float=0.1, 
-        patience:int=5, weight_decay:float=0, num_epochs:int=100, verbose:bool=False, loss_scalar:int=1000, overwrite_class_model:bool=True, 
+        patience:int=5, weight_decay:float=0, num_epochs:int=100, verbose:bool=False, loss_scalar:int=1000, max_epochs:int=100, overwrite_class_model:bool=True, 
         input_scaling=None, input_time_scaling=None, **kwargs):
         # copy model to avoid overwriting
         model = deepcopy(model)
@@ -829,7 +872,7 @@ class Forecaster():
             best_val_loss = np.inf
             best_model_state = None
             counter = 0
-        for epoch in range(num_epochs):
+        for epoch in range(max_epochs):
             losses = []
             for i, (inputs, time_inputs, targets) in enumerate(train_loader):
                 # put all batches on the correct device
@@ -903,15 +946,15 @@ class Forecaster():
         # save model to Forecaster class
         if overwrite_class_model:
             self.lstm = model
-            self.dependent_variable = input_scaling[0].iloc[0]
-            self.predictor_variables = input_scaling[0].iloc[1:]
+            self.dependent_variable = input_scaling[0].index[0]
+            self.predictor_variables = input_scaling[0].index[1:]
 
         return model
 
     """
     
     """
-    def format_fit_lstm(self, clean_data, sequence_length:int=10, batch_size:int=10, proportion_validation=0.1, lstm_device:str="cpu", overwrite_class_model:bool=True, **kwargs):
+    def format_fit_lstm(self, clean_data, sequence_length:int=10, batch_size:int=10, max_epochs:int=5, proportion_validation=0.1, lstm_device:str="cpu", overwrite_class_model:bool=True, verbose:bool=True, **kwargs):
         # format the data for lstm training
         train_loader, val_loader, input_scaling, input_time_scaling = self.format_lstm_data(clean_data, sequence_length, batch_size, proportion_validation, **kwargs)
 
@@ -919,8 +962,8 @@ class Forecaster():
         lstm = LSTM(input_size=train_loader.dataset[0][0].shape[-1]+train_loader.dataset[0][1].shape[-1], output_size=1, training_sequence_length=sequence_length, **kwargs).to(device=lstm_device)
 
         # fit the LSTM model
-        self.fit_lstm(lstm, train_loader=train_loader, val_loader=val_loader, input_scaling=input_scaling, input_time_scaling=input_time_scaling, 
-            device=lstm_device, overwrite_class_model=overwrite_class_model, verbose=True, **kwargs)
+        self.fit_lstm(lstm, train_loader=train_loader, val_loader=val_loader, input_scaling=input_scaling, input_time_scaling=input_time_scaling, max_epochs=max_epochs,
+            device=lstm_device, overwrite_class_model=overwrite_class_model, verbose=verbose, **kwargs)
 
         return lstm
 
