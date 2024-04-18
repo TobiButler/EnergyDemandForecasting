@@ -15,6 +15,7 @@ def main(test_data_collection:bool=True, test_data_processing:bool=True, test_fo
     """
     
     """
+    import get_data as gd
     ### unit tests for data collection component ###
     if test_data_collection:
         # open the api yaml configuration file

@@ -117,10 +117,10 @@ class Forecaster():
         a dictionary of optional hyperparameters.
     """
     def fit(self, clean_training_data:pd.DataFrame, dependent_variable:str, strong_predictors:list=[], 
-            hyperparameters:dict=dict(changepoint_prior_scale=0.001, seasonality_prior_scale=0.01, 
-            point_var_lags=10, minimum_error_prediction=None, error_trend=1e-4, lr=0.0005, dropout=0.1,
-            batch_size=100, sequence_length=3*7*24, patience=4, loss_scalar=1e4), lstm_device:str="cpu", 
-            verbose:bool=True, **kwargs):
+        fit_pv:bool=True, fit_lstm:bool=True, hyperparameters:dict=dict(changepoint_prior_scale=0.001, 
+        seasonality_prior_scale=0.01, point_var_lags=10, minimum_error_prediction=None, error_trend=1e-4, 
+        lr=0.0005, dropout=0.1, batch_size=100, sequence_length=3*7*24, patience=4, loss_scalar=1e4), 
+        lstm_device:str="cpu", verbose:bool=True, **kwargs):
         """
         Parameters:
         ----------
@@ -134,18 +134,21 @@ class Forecaster():
 
         hyperparameters (dict): all optional hyperparamters for the model (see method definition for default values)
         """
-        # fit point forecasting Prophet models 
-        print("Fitting Prophet-VAR Model")
-        residuals = self._fit_prophet_models(clean_training_data=clean_training_data, dependent_variable=dependent_variable, **hyperparameters)
+        if fit_pv:
+            # fit point forecasting Prophet models 
+            if verbose: print("Fitting Prophet-VAR Model")
+            residuals = self._fit_prophet_models(clean_training_data=clean_training_data, dependent_variable=dependent_variable, **hyperparameters)
 
-        # fit point forecasting VAR model
-        squared_errors = self._fit_point_var(residuals=residuals, dependent_variable=dependent_variable, strong_predictors=strong_predictors)
+            # fit point forecasting VAR model
+            squared_errors = self._fit_point_var(residuals=residuals, dependent_variable=dependent_variable, strong_predictors=strong_predictors)
 
-        # fit variance forecasting Prophet model
-        self._fit_error_forecaster(dependent_variable=dependent_variable, squared_errors=squared_errors, **hyperparameters)
-        # fit lstm model
-        print("Fitting LSTM Model")
-        lstm = self.format_fit_lstm(clean_training_data, proportion_validation=0.1, lstm_device=lstm_device, verbose=verbose, **hyperparameters)
+            # fit variance forecasting Prophet model
+            self._fit_error_forecaster(dependent_variable=dependent_variable, squared_errors=squared_errors, **hyperparameters)
+        
+        if fit_lstm:
+            # fit lstm model
+            if verbose: print("Fitting LSTM Model")
+            lstm = self.format_fit_lstm(clean_training_data, proportion_validation=0.1, lstm_device=lstm_device, verbose=verbose, **hyperparameters)
 
 
     """
@@ -433,7 +436,9 @@ class Forecaster():
 
         """
         # check that columns match what was used to train the models
-        if list(pd.get_dummies(input_data, drop_first=True).columns) != ([self.dependent_variable] + list(self.predictor_variables)):
+        print(list(pd.get_dummies(input_data, drop_first=False).columns))
+        print(([self.dependent_variable] + list(self.predictor_variables)))
+        if list(pd.get_dummies(input_data, drop_first=False).columns) != ([self.dependent_variable] + list(self.predictor_variables)):
             raise SystemExit("The names and order of the columns provided in the input dataset do not match those used to train the LSTM model. " \
                 "Please ensure that the input dataset matches that used to train the LSTM model.")
 
@@ -510,7 +515,7 @@ class Forecaster():
                 time_inputs = time_inputs.to(device=device)
                 
                 # make short-term predictions
-                point_forecasts = (self.lstm(inputs, time_inputs)[:,0].cpu().numpy() * 
+                point_forecasts = (self.lstm(inputs, time_inputs, bayesian_predict=False)[:,0].cpu().numpy() * 
                         (self.lstm.input_scaling[1][self.dependent_variable]-self.lstm.input_scaling[0][self.dependent_variable]) + self.lstm.input_scaling[0][self.dependent_variable])
 
                 # predict error variances
@@ -588,9 +593,11 @@ class Forecaster():
 
             # fit model on the train_data
             self.fit(clean_training_data=train_data, dependent_variable=dependent_variable, 
-                strong_predictors=strong_predictors, hyperparameters=pv_hyperparameters)
+                strong_predictors=strong_predictors, hyperparameters=pv_hyperparameters, fit_lstm=False, verbose=False)
             
-            point_forecasts, error_forecasts = self.predict(test_data.shape[0])
+            forecasts = self.long_term_predict(test_data.shape[0])
+            point_forecasts = forecasts["Point Forecasts"].values
+            error_forecasts = forecasts["Variance Forecasts"].values
 
             if return_predictions:
                 model_predictions.append([point_forecasts, error_forecasts])
@@ -621,7 +628,7 @@ class Forecaster():
         provided and using MSE and weighted MSE metrics. This method does not cross validate an Prophet-VAR model. See cross_validate_pf() for that.
     """
     def cross_validate_lstm(self, num_folds:int, clean_training_data:pd.DataFrame, dependent_variable:str, 
-        forecasting_steps_ahead:int, lstm_hyperparameters:dict=None, early_stopping_prop:float=0.1, device:str="cpu", strong_predictors:list[str]=[], 
+        lstm_hyperparameters:dict=None, early_stopping_prop:float=0.1, device:str="cpu", strong_predictors:list[str]=[], 
         return_predictions:bool=False, verbose_validation:bool=False, verbose_training:bool=False):
         """
         
@@ -644,14 +651,14 @@ class Forecaster():
 
             # format training dataset
             train_loader, val_loader, input_scaling, input_time_scaling = self.format_lstm_data(train_data, sequence_length=lstm_hyperparameters["sequence_length"], 
-                batch_size=lstm_hyperparameters["batch_size"], forecasting_steps_ahead=forecasting_steps_ahead, proportion_validation=early_stopping_prop)
+                batch_size=lstm_hyperparameters["batch_size"], forecasting_steps_ahead=self.short_term_horizon, proportion_validation=early_stopping_prop)
 
             # format validation dataset
-            validation_last_train_index = -(lstm_hyperparameters["sequence_length"]+forecasting_steps_ahead)
+            validation_last_train_index = -(lstm_hyperparameters["sequence_length"]+self.short_term_horizon)
             temp_test_data = pd.concat([train_data[validation_last_train_index:], test_data], axis=0) # add last sequence length of the training data to start of validation data
             # return test_data
             _, validation_loader, _, _  = self.format_lstm_data(temp_test_data, sequence_length=lstm_hyperparameters["sequence_length"], batch_size=lstm_hyperparameters["batch_size"], 
-                forecasting_steps_ahead=forecasting_steps_ahead, proportion_validation=1, input_scaling=input_scaling, input_time_scaling=input_time_scaling)
+                forecasting_steps_ahead=self.short_term_horizon, proportion_validation=1, input_scaling=input_scaling, input_time_scaling=input_time_scaling)
             
             # define input size
             input_size = train_loader.dataset[0][0].shape[-1] + train_loader.dataset[0][1].shape[-1]
@@ -723,7 +730,8 @@ class Forecaster():
     """
     def tune_hyperparameters(self, clean_training_data:pd.DataFrame, dependent_variable:str, 
         pv_hyperparameter_sets:list[dict]=None, lstm_hyperparameter_sets:list[dict]=None, num_cv_folds:int=5, 
-        strong_predictors:list[str]=[]):
+        previous_pv_results:pd.DataFrame=None, previous_lstm_results:pd.DataFrame=None, strong_predictors:list[str]=[], 
+        verbose:bool=True, **kwargs):
         """
         Parameters:
         ----------
@@ -745,23 +753,27 @@ class Forecaster():
         ----------
         list[tuple]: a list of tuples. Each tuple will contain a hyperparameter set and its evaluation results.
         """
-
         # tune hyperparameters for Prophet-VAR model
         if pv_hyperparameter_sets is None: pv_hyperparameter_results = None
         else: 
+            # HERE create new dataframe to hold results unless dataframe is provided, then use that...
+            if verbose: print("Tuning Prophet-VAR Model using hyperparameter sets provided.")
             pv_hyperparameter_results = []
             for set in pv_hyperparameter_sets: # for each set of hyperparameters, perform cross validation
-                mse, wmse = self.cross_validate_pv(num_cv_folds, clean_training_data, dependent_variable, set, 
-                    strong_predictors=strong_predictors)
+                mse, wmse = self.cross_validate_pv(num_cv_folds, clean_training_data, dependent_variable, pv_hyperparameters=set, 
+                    strong_predictors=strong_predictors, **kwargs)
+                if verbose: print("Hyperparameters: {}; MSE: {:.3f}; WMSE: {:.3f}".format(set, mse, wmse))
                 pv_hyperparameter_results.append([set, mse, wmse])
 
         # tune hyperparameters for Prophet-VAR model
         if lstm_hyperparameter_sets is None: lstm_hyperparameter_results = None
         else: 
+            if verbose: print("Tuning LSTM Model using hyperparameter sets provided.")
             lstm_hyperparameter_results = []
             for set in lstm_hyperparameter_sets: # for each set of hyperparameters, perform cross validation
-                mse, wmse = self.cross_validate_pv(num_cv_folds, clean_training_data, dependent_variable, set, 
-                    strong_predictors=strong_predictors)
+                mse, wmse = self.cross_validate_lstm(num_cv_folds, clean_training_data, dependent_variable, lstm_hyperparameters=set, 
+                    strong_predictors=strong_predictors, **kwargs)
+                if verbose: print("Hyperparameters: {}; MSE: {:.3f}; WMSE: {:.3f}".format(set, mse, wmse))
                 lstm_hyperparameter_results.append([set, mse, wmse])
 
         # return results as a list of tuples where each tuple contains the hyperparameter dict, mse, and wmse
@@ -787,7 +799,7 @@ class Forecaster():
 
         # encode hour of the day, day of the week, and day of the year into a new dataframe
         input_time = pd.DataFrame(data={"Hour of Day":clean_data.index.hour, "Day of Week":clean_data.index.dayofweek, "Day of Year":clean_data.index.dayofyear}, index=clean_data.index)
-        input_data = pd.get_dummies(clean_data, drop_first=True).astype("float32")
+        input_data = pd.get_dummies(clean_data, drop_first=False).astype("float32")
 
         # calculate normalization factors. Also save these as they will be used later to transform output back to actual values.
         if input_scaling is None:
@@ -856,7 +868,7 @@ class Forecaster():
     
     """
     def fit_lstm(self, model:LSTM, train_loader:t.utils.data.DataLoader, val_loader:t.utils.data.DataLoader=None, lr:float=0.0005, dropout:float=0.1, 
-        patience:int=5, weight_decay:float=0, num_epochs:int=100, verbose:bool=False, loss_scalar:int=1000, max_epochs:int=100, overwrite_class_model:bool=True, 
+        patience:int=5, weight_decay:float=0, verbose:bool=False, loss_scalar:int=1000, max_epochs:int=100, overwrite_class_model:bool=True, 
         input_scaling=None, input_time_scaling=None, **kwargs):
         # copy model to avoid overwriting
         model = deepcopy(model)

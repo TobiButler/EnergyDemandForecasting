@@ -7,6 +7,8 @@ Description: This Python module contains functionality to clean and process a pr
     visuals saved to the local working directory.
 """
 
+# TODO: make sure no times are skipped?
+
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -148,10 +150,10 @@ class PreprocessingPipeline():
             # produce scatterplots with dependent variable
             self.scatterplots(clean_training_data=clean_training_data)
 
-        # produce time series decomposition plots
-        residual_components = self.time_series_decompositions(clean_training_data=clean_training_data, save_residuals=True)
+            # produce time series decomposition plots
+            self.time_series_decompositions(clean_training_data=clean_training_data)
 
-        return clean_training_data, residual_components
+        return clean_training_data #, residual_components
 
     """
     This function takes a preliminary dataset and applies a 90-10 split to separate it into training and holdout 
@@ -181,7 +183,7 @@ class PreprocessingPipeline():
 
         # use last 10% of data for final evaluation
         evaluation_length = int(np.ceil(prelim_dataset.shape[0] * 0.1))
-        holdout_test_data = prelim_dataset.iloc[-evaluation_length:, :]["Energy Demand (MWH)"]
+        holdout_test_data = prelim_dataset.iloc[-evaluation_length:, :]
 
         # remove test data from the rest of the dataset
         training_data = prelim_dataset[~prelim_dataset.index.isin(holdout_test_data.index)]
@@ -313,6 +315,8 @@ class PreprocessingPipeline():
             transformed_training_data = prelim_training_data.copy() # don't overwrite dataset
             transformed_training_data.loc[:, "HourlyPrecipitation"] = pd.cut(transformed_training_data['HourlyPrecipitation'], 
                 bins=bins, labels=labels)
+            transformed_training_data["HourlyPrecipitation"] = transformed_training_data["HourlyPrecipitation"].astype(
+                pd.api.types.CategoricalDtype(categories=['Heavy Rain', 'Light Rain', 'Medium Rain', 'None'], ordered=True))
             
         except KeyError: pass
 
@@ -372,9 +376,9 @@ class PreprocessingPipeline():
             clean_data.loc[to_impute, variable] = interpolated_values["yhat"][to_impute].values
 
             # save fit model
-            variable = variable.replace(r"/", "-")
-            with open("{}/{}.pkl".format(path_to_prophet_models, variable), "wb") as file:
-                pkl.dump(model, file=file)
+            # variable = variable.replace(r"/", "-")
+            # with open("{}/{}.pkl".format(path_to_prophet_models, variable), "wb") as file:
+            #     pkl.dump(model, file=file)
         
         for variable in [x for x in outliers_removed_data.columns if x not in time_series_variables]:
             if verbose: print(f"Interpolating for variable {variable}")
@@ -583,10 +587,22 @@ class PreprocessingPipeline():
         # loop through each variable, producing time series decomposition and optionally saving residuals
         ts_breakdown = []
         for variable in clean_training_data.select_dtypes("number").columns:
-            file_variable = variable.replace(r"/", "-")
-            with open(r"{}/{}.pkl".format(path_to_prophet_models, file_variable), "rb") as file:
-                model = pkl.load(file=file)
             df = clean_training_data[[variable]].reset_index().rename(columns={"index":"ds", variable:"y"})
+
+            # define prophet model with all seasonality components and high regularization
+            model = Prophet(weekly_seasonality=True, yearly_seasonality=True, daily_seasonality=True, 
+                changepoint_prior_scale=0.001, seasonality_prior_scale=0.01)
+            
+            # fit model
+            model.fit(df)
+
+            # # calculate interpolations
+            # interpolated_values = model.predict(df)
+            # to_impute = outliers_removed_data[variable].isna().values
+            # clean_data.loc[to_impute, variable] = interpolated_values["yhat"][to_impute].values
+            # # file_variable = variable.replace(r"/", "-")
+            # # with open(r"{}/{}.pkl".format(path_to_prophet_models, file_variable), "rb") as file:
+            # #     model = pkl.load(file=file)
             forecasts = model.predict(df)
             forecasts.index = pd.to_datetime(clean_training_data.index)
             forecasts['y'] = df['y'].values
@@ -680,11 +696,11 @@ class PreprocessingPipeline():
                 save_png_encoded(r'{}/{}.png'.format(path_to_plots, filename_variable), fig)
                 plt.close()
 
-        if save_residuals and self.save_datasets:
-            if path_to_residual_dataset is None: path_to_residual_dataset = r"{}/Datasets/residuals.csv".format(self.saved_directory)
-            clean_training_data.to_csv(path_to_residual_dataset)
+        # if save_residuals and self.save_datasets:
+        #     if path_to_residual_dataset is None: path_to_residual_dataset = r"{}/Datasets/residuals.csv".format(self.saved_directory)
+        #     clean_training_data.to_csv(path_to_residual_dataset)
 
-        return clean_training_data # really the residuals
+        # return clean_training_data # really the residuals
 
 
     # obtain time series residuals from decompositions
