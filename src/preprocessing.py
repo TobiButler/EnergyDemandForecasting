@@ -533,7 +533,7 @@ class PreprocessingPipeline():
         # scatter plots for categorical predictors
         for variable in [x for x in clean_training_data.columns if x not in continuous_variables]:
             # calculate average value of dependent variable for each category of predictor
-            means = clean_training_data.groupby(by=[variable])[dependent_variable].mean()
+            means = clean_training_data.groupby(by=[variable], observed=False)[dependent_variable].mean()
 
             # scatter plot
             fig = plt.figure(figsize=(8,5))
@@ -784,23 +784,46 @@ def detect_outliers(data:pd.Series, n:int=1000, p:float=0.001):
     - outliers: Boolean array indicating whether each data point is an outlier.
     """
 
+    # drop NAN values. Don't want to include them in outlier detection.
+    data_no_nan = data[data.notna()]
+
     # define array to hold boolean identifications
-    outliers = np.zeros_like(data, dtype=bool)
+    outliers = np.zeros_like(data_no_nan, dtype=bool)
     half_n = n // 2 # define upper and lower window sizes
 
-    for i in range(half_n, len(data) - half_n):
-        window = data.iloc[i - half_n : i + half_n + 1] # define window
+    for i in range(half_n, len(data_no_nan) - half_n):
+        window = data_no_nan.iloc[i - half_n : i + half_n + 1] # define window
         mean = np.mean(window)
         std_dev = np.std(window)
-            
-        z_score = (data.iloc[i] - mean) / std_dev
+        
+        if (np.isnan(std_dev)) or (std_dev==0): continue
+        try:
+            z_score = (data_no_nan.iloc[i] - mean) / std_dev
+        except Warning:
+            print(std_dev)
+            print(z_score)
+            print(mean)
+            print(data_no_nan.iloc[i])
+        except Exception:
+            print(std_dev)
+            print(z_score)
+            print(mean)
+            print(data_no_nan.iloc[i])
+        if np.isnan(z_score):
+            print(std_dev)
+            print(z_score)
+            print(mean)
+            print(data_no_nan.iloc[i])
         probability = norm.cdf(z_score) # calculate probability of generating sample from points around it
 
         # check if sample is highly unlikely to be generated from the same distribution as the points around it
         if (probability >= (1 - p/2)) or (probability <= p/2):
             outliers[i] = True
 
-    return outliers
+    result = data.copy().astype(bool)
+    result.loc[data_no_nan.index] = outliers
+
+    return result
 
 
 def save_png_encoded(filepath:str, fig:plt.Figure, return_raw_encoding:bool=False):

@@ -270,7 +270,8 @@ class Forecaster():
         # Fit VAR model (ignoring warnings because I cannot figure out how to prevent a ValueWarning.)
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore", category=UserWarning)
-            point_var_model = VAR(endogenous_data, freq=datetime.timedelta(hours=1))
+            # point_var_model = VAR(endogenous_data, freq=datetime.timedelta(hours=1))
+            point_var_model = VAR(endogenous_data)
             point_var_result = point_var_model.fit()
         self.point_var_model = point_var_result
         self.point_var_context = endogenous_data.values[-point_var_result.k_ar:]
@@ -330,8 +331,10 @@ class Forecaster():
                 if variable == dependent_variable: 
                     self.error_prophet_model = error_model
             # fit VAR model on the residuals of the squared error prophet models
-            error_var_model = VAR(error_residuals, freq=datetime.timedelta(hours=1))
-            error_var_result = error_var_model.fit()
+            with warnings.catch_warnings():
+                warnings.filterwarnings("ignore", category=UserWarning)
+                error_var_model = VAR(error_residuals)
+                error_var_result = error_var_model.fit()
             self.error_var_model = error_var_result
             self.error_var_context = error_residuals.values[-error_var_result.k_ar:]
 
@@ -436,9 +439,9 @@ class Forecaster():
 
         """
         # check that columns match what was used to train the models
-        print(list(pd.get_dummies(input_data, drop_first=False).columns))
-        print(([self.dependent_variable] + list(self.predictor_variables)))
-        if list(pd.get_dummies(input_data, drop_first=False).columns) != ([self.dependent_variable] + list(self.predictor_variables)):
+        # print(list(pd.get_dummies(input_data, drop_first=True).columns))
+        # print(([self.dependent_variable] + list(self.predictor_variables)))
+        if list(pd.get_dummies(input_data, drop_first=True).columns) != ([self.dependent_variable] + list(self.predictor_variables)):
             raise SystemExit("The names and order of the columns provided in the input dataset do not match those used to train the LSTM model. " \
                 "Please ensure that the input dataset matches that used to train the LSTM model.")
 
@@ -799,7 +802,7 @@ class Forecaster():
 
         # encode hour of the day, day of the week, and day of the year into a new dataframe
         input_time = pd.DataFrame(data={"Hour of Day":clean_data.index.hour, "Day of Week":clean_data.index.dayofweek, "Day of Year":clean_data.index.dayofyear}, index=clean_data.index)
-        input_data = pd.get_dummies(clean_data, drop_first=False).astype("float32")
+        input_data = pd.get_dummies(clean_data, drop_first=True).astype("float32")
 
         # calculate normalization factors. Also save these as they will be used later to transform output back to actual values.
         if input_scaling is None:

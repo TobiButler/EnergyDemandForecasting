@@ -6,6 +6,7 @@ import model_definitions as md
 import yaml
 from termcolor import colored
 import random
+import traceback
 
 
 """
@@ -24,7 +25,7 @@ def main(test_data_collection:bool=True, test_data_processing:bool=True, test_fo
             eia_api_key = data["eia"]
 
         # test using random start date and random end date, run all data collection methods and check that they return non-empty dataframes
-        print("Running Data Collection Test 1.")
+        print("\nRunning Data Collection Test 1.")
         try:
             start_date = (np.datetime64('today') - np.timedelta64(np.random.randint(0, 10000), 'D'))
             end_date = start_date + np.timedelta64(np.random.randint(0, 10000), 'D')
@@ -37,14 +38,14 @@ def main(test_data_collection:bool=True, test_data_processing:bool=True, test_fo
             print(colored('Data Collection Test 1 Failed. An error occurred.', 'red'))
 
         # test using too early of a start date and too late of an end date
-        print("Running Data Collection Test 2.")
+        print("\nRunning Data Collection Test 2.")
         start_date = np.datetime64("1970-01-01")
         end_date = np.datetime64("2030-01-01")
         df = gd.main(start_date, end_date, eia_api_key, save_dataset=False, verbose=False)
         print(test_data_collection_df(df, 2, start_date=start_date, end_date=end_date))
 
         # test using start date after end date
-        print("Running Data Collection Test 3.")
+        print("\nRunning Data Collection Test 3.")
         try:
             start_date = np.datetime64('today') - np.timedelta64(np.random.randint(0, 10000), 'D')
             end_date = start_date - np.timedelta64(np.random.randint(0, 10000), 'D')
@@ -56,7 +57,7 @@ def main(test_data_collection:bool=True, test_data_processing:bool=True, test_fo
             print(colored('Data Collection Test 3 Failed. An error occurred.', 'red'))
 
         # test using non-date-like start and end arguments
-        print("Running Data Collection Test 4.")
+        print("\nRunning Data Collection Test 4.")
         try:
             df = gd.main(1, 2, eia_api_key, save_dataset=False, verbose=False)
         except SystemExit as e: 
@@ -69,7 +70,7 @@ def main(test_data_collection:bool=True, test_data_processing:bool=True, test_fo
     ### unit tests for data processing component ###
     if test_data_processing: 
         # load preliminary dataset
-        print("Loading Preliminary Data for Data Processing Tests")
+        print("\nLoading Preliminary Data for Data Processing Tests")
         preliminary_dataset = pd.read_csv(r"Saved/Datasets/preliminary.csv", index_col=0)
 
         # insert outliers into the preliminary dataset
@@ -91,9 +92,9 @@ def main(test_data_collection:bool=True, test_data_processing:bool=True, test_fo
         for x in missing_values_indices: preliminary_dataset.iloc[x] = np.nan
 
         # run the data processing component
-        print("Running Data Processing Tests 1 & 2.")
+        print("\nRunning Data Processing Tests 1 & 2.")
         processor = pp.PreprocessingPipeline(save_datasets=False, produce_eda_plots=False)
-        clean_data, _ = processor.process_dataset(preliminary_dataset, verbose=False)
+        clean_data = processor.process_dataset(preliminary_dataset, verbose=False)
 
         # check that outliers have been replaced
         nov = [clean_data.iloc[x] for x in outlier_indices] # new outliers values
@@ -110,7 +111,7 @@ def main(test_data_collection:bool=True, test_data_processing:bool=True, test_fo
             print(colored("Data Processing Test 2 Failed. Missing values still remain in the dataaset after processing.", "red"))
 
         # test that the ProcessingPipeline can handle input of the wrong datatype
-        print("Running Data Processing Test 3.")
+        print("\nRunning Data Processing Test 3.")
         try:
             processor.process_dataset(1,2,3,4)
         except SystemExit as e: 
@@ -122,17 +123,18 @@ def main(test_data_collection:bool=True, test_data_processing:bool=True, test_fo
 
     ### unit tests for Forecasting model functionality ###
     if test_forecasting_model:
-
+        print("\nLoading clean data for forecast modeling tests.")
         # load in clean dataset
         clean_data = pd.read_csv(r"Saved/Datasets/clean_training.csv", index_col=0)
         clean_data.index = pd.to_datetime(clean_data.index)
-        clean_data.loc[:,"HourlyPrecipitation"] = clean_data["HourlyPrecipitation"].replace({np.nan:"None"})
+        # clean_data.loc[:,"HourlyPrecipitation"] = clean_data["HourlyPrecipitation"].replace({np.nan:"None"})
 
         # define model
         f = md.Forecaster()
 
         # fit model
         try:
+            print("\nRunning forecast modeling test 1.")
             sequence_length = 24
             hyperparameters = {'changepoint_prior_scale': 0.001, 'seasonality_prior_scale': 0.01, 'point_var_lags': 10, 'minimum_error_prediction': 100, 
                 'error_trend': 100, "batch_size":100, "lr":0.0005, "dropout":0.1, "num_layers":1, "hidden_size":16, "sequence_length":sequence_length, "max_epochs":5}
@@ -141,8 +143,10 @@ def main(test_data_collection:bool=True, test_data_processing:bool=True, test_fo
         except BaseException as e:
             print(type(e), e)
             print(colored('Forecasting Model Test 1 Failed. The model ran into an error while being fit.', 'red'))
+            traceback.print_exc()
 
         # make short-term forecasts, check format
+        print("\nRunning forecast modeling test 2.")
         short_term_forecasts = f.short_term_predict(clean_data, expected_output_size=clean_data.shape[0]-f.short_term_horizon-sequence_length, 
             lstm_sequence_length=sequence_length)
         if short_term_forecasts.shape == (clean_data.shape[0]-f.short_term_horizon-sequence_length, 2):
@@ -152,6 +156,7 @@ def main(test_data_collection:bool=True, test_data_processing:bool=True, test_fo
 
         # test using incorrect input for predicting short-term forecasts
         try:
+            print("\nRunning forecast modeling test 3.")
             short_term_forecasts = f.short_term_predict(clean_data.iloc[:100, 0], expected_output_size=clean_data.shape[0]-f.short_term_horizon-sequence_length, 
                 lstm_sequence_length=sequence_length)
             short_term_forecasts = f.short_term_predict(clean_data, expected_output_size=0, 
@@ -163,6 +168,7 @@ def main(test_data_collection:bool=True, test_data_processing:bool=True, test_fo
             print(colored('Forecasting Model Test 3 Failed. The model was unable to handle badly formatted input.', 'red'))
 
         # make long-term forecasts, check format
+        print("\nRunning forecast modeling test 4.")
         n = 1000
         long_term_forecasts = f.long_term_predict(hours_ahead=n)
         if long_term_forecasts.shape == (n, 2):
@@ -172,6 +178,7 @@ def main(test_data_collection:bool=True, test_data_processing:bool=True, test_fo
 
         # test using incorrect input for predicting long-term forecasts
         try:
+            print("\nRunning forecast modeling test 5.")
             long_term_forecasts = f.long_term_predict(hours_ahead=7.5)
             long_term_forecasts = f.long_term_predict(hours_ahead=-1)
         except SystemExit:
@@ -194,4 +201,5 @@ def test_data_collection_df(df, test_int:int, start_date, end_date):
     
 
 if __name__ == "__main__":
+    # main(test_data_collection=False, test_data_processing=False, test_forecasting_model=True)
     main(test_data_collection=True, test_data_processing=True, test_forecasting_model=True)
