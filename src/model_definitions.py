@@ -732,9 +732,8 @@ class Forecaster():
     This method takes a list of hyperparameter sets and evaluates each using cross-validation.
     """
     def tune_hyperparameters(self, clean_training_data:pd.DataFrame, dependent_variable:str, 
-        pv_hyperparameter_sets:list[dict]=None, lstm_hyperparameter_sets:list[dict]=None, num_cv_folds:int=5, 
-        previous_pv_results:pd.DataFrame=None, previous_lstm_results:pd.DataFrame=None, strong_predictors:list[str]=[], 
-        verbose:bool=True, **kwargs):
+        pv_hyperparameter_sets:pd.DataFrame=None, lstm_hyperparameter_sets:pd.DataFrame=None, num_cv_folds:int=5, 
+        strong_predictors:list[str]=[], verbose:bool=True, **kwargs):
         """
         Parameters:
         ----------
@@ -756,31 +755,32 @@ class Forecaster():
         ----------
         list[tuple]: a list of tuples. Each tuple will contain a hyperparameter set and its evaluation results.
         """
-        # tune hyperparameters for Prophet-VAR model
-        if pv_hyperparameter_sets is None: pv_hyperparameter_results = None
-        else: 
-            # HERE create new dataframe to hold results unless dataframe is provided, then use that...
-            if verbose: print("Tuning Prophet-VAR Model using hyperparameter sets provided.")
-            pv_hyperparameter_results = []
-            for set in pv_hyperparameter_sets: # for each set of hyperparameters, perform cross validation
-                mse, wmse = self.cross_validate_pv(num_cv_folds, clean_training_data, dependent_variable, pv_hyperparameters=set, 
-                    strong_predictors=strong_predictors, **kwargs)
-                if verbose: print("Hyperparameters: {}; MSE: {:.3f}; WMSE: {:.3f}".format(set, mse, wmse))
-                pv_hyperparameter_results.append([set, mse, wmse])
+        # wrap the process in try-except block so results are returned upon any errors
+        try:
+            # tune hyperparameters for Prophet-VAR model
+            if pv_hyperparameter_sets is not None:
+                if verbose: print("Tuning Prophet-VAR Model using hyperparameter sets provided.")
+                for i in pv_hyperparameter_sets.index: # for each set of hyperparameters, perform cross validation
+                    set = pv_hyperparameter_sets.loc[i].drop(["MSE", "WMSE"]).to_dict()
+                    mse, wmse = self.cross_validate_pv(num_cv_folds, clean_training_data, dependent_variable, pv_hyperparameters=set, 
+                        strong_predictors=strong_predictors, **kwargs)
+                    if verbose: print("Hyperparameters: {}; MSE: {:.3f}; WMSE: {:.3f}".format(set, mse, wmse))
+                    pv_hyperparameter_sets.loc[i, ["MSE", "WMSE"]] = [mse, wmse]
 
-        # tune hyperparameters for Prophet-VAR model
-        if lstm_hyperparameter_sets is None: lstm_hyperparameter_results = None
-        else: 
-            if verbose: print("Tuning LSTM Model using hyperparameter sets provided.")
-            lstm_hyperparameter_results = []
-            for set in lstm_hyperparameter_sets: # for each set of hyperparameters, perform cross validation
-                mse, wmse = self.cross_validate_lstm(num_cv_folds, clean_training_data, dependent_variable, lstm_hyperparameters=set, 
-                    strong_predictors=strong_predictors, **kwargs)
-                if verbose: print("Hyperparameters: {}; MSE: {:.3f}; WMSE: {:.3f}".format(set, mse, wmse))
-                lstm_hyperparameter_results.append([set, mse, wmse])
+            # tune hyperparameters for LSTM model
+            if lstm_hyperparameter_sets is not None: 
+                if verbose: print("Tuning LSTM Model using hyperparameter sets provided.")
+                for i in lstm_hyperparameter_sets.index: # for each set of hyperparameters, perform cross validation
+                    set = lstm_hyperparameter_sets.loc[i].drop(["MSE", "WMSE"]).to_dict()
+                    mse, wmse = self.cross_validate_lstm(num_cv_folds, clean_training_data, dependent_variable, lstm_hyperparameters=set, 
+                        strong_predictors=strong_predictors, **kwargs)
+                    if verbose: print("Hyperparameters: {}; MSE: {:.3f}; WMSE: {:.3f}".format(set, mse, wmse))
+                    lstm_hyperparameter_sets.loc[i, ["MSE", "WMSE"]] = [mse, wmse]
 
-        # return results as a list of tuples where each tuple contains the hyperparameter dict, mse, and wmse
-        return pv_hyperparameter_results, lstm_hyperparameter_results
+            # return results as a list of tuples where each tuple contains the hyperparameter dict, mse, and wmse
+            return pv_hyperparameter_sets, lstm_hyperparameter_sets
+        except BaseException: 
+            return pv_hyperparameter_sets, lstm_hyperparameter_sets
 
 
     """

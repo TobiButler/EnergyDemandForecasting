@@ -1,3 +1,4 @@
 ,MSE,Weighted MSE,MAE,MAPE,Wilcoxon Test p-value
-Forecasting Pipeline,TBD,TBD,TBD,TBD,TBD
-EIA Forecasts,136775.85,TBD,308.38,0.06,
+Forecasting Pipeline,170066.59,170061.86,316.14,0.06,
+Baseline Moving Avg,357804.17,357804.17,518.69,0.1,0.0
+EIA Forecasts,110498.24,,286.98,0.06,0.0

@@ -48,12 +48,16 @@ class PreprocessingPipeline():
         self.save_datasets = save_datasets
         self.eda_error = "This ProcessingPipeline has not been instantiated to produce eda plots. You must set \"produce_eda_plots\" to True."
 
+        # attributes required to run the processing pipeline on new data
+        self.prophet_models = {}
+
+
         # Create file system for saving datasets and figures
 
         # Define subdirectories
         self.subdirectories = {
             'Datasets': [],
-            'Models': ['Prophet'],
+            'Models': [],
             'Plotly Figures': ['Raw Time Series', 'Outlier Detection'],
             'Static Visuals':['Distributions', 'Scatterplots', 'Decompositions'],
         }
@@ -77,7 +81,7 @@ class PreprocessingPipeline():
         argument to produce exploratory data analysis visualizations.
     """
     def process_dataset(self, preliminary_dataset:pd.DataFrame=None, path_to_prelim_dataset:str=None, split_into_train_holdout:bool=False, 
-        verbose:bool=True, **kwargs) -> pd.DataFrame:
+        path_to_holdout_dataset:str=None, path_to_clean_dataset:str=None, train:bool=True, verbose:bool=True, **kwargs) -> pd.DataFrame:
         """
         Parameters:
         ----------
@@ -99,7 +103,7 @@ class PreprocessingPipeline():
         if (type(preliminary_dataset)!=pd.DataFrame) and (type(path_to_prelim_dataset)!=str):
             raise SystemExit("If providing a dataset, it must be a Pandas DataFrame. If providing a path, it must be a string.")
         # if producing eda plots, delete current contents of directories
-        if self.produce_eda_plots:
+        if self.produce_eda_plots and train:
             for subdir, subsubdirs in self.subdirectories.items():
                 subdir_path = os.path.join(self.saved_directory, subdir)
                 for subsubdir in subsubdirs:
@@ -116,7 +120,6 @@ class PreprocessingPipeline():
         if not os.path.exists(self.saved_directory):
             os.makedirs(self.saved_directory)
         
-        
         # get path to preliminary dataset if not provided
         if preliminary_dataset is None:
             if path_to_prelim_dataset is None:
@@ -124,13 +127,14 @@ class PreprocessingPipeline():
             else:
                 preliminary_dataset = pd.read_csv(path_to_prelim_dataset)
         
-        if split_into_train_holdout:
+        if split_into_train_holdout and train:
             # split dataset into training and holdout evaluation sets
             training_data, holdout_test_data = self.split_preliminary_dataset(prelim_dataset=preliminary_dataset)
         else: # process all data
             training_data = preliminary_dataset.copy()
+            holdout_test_data = None
 
-        if self.produce_eda_plots:
+        if self.produce_eda_plots and train:
             # produce raw time series plots
             self.raw_time_series_plots(prelim_training_data=training_data)
 
@@ -141,9 +145,9 @@ class PreprocessingPipeline():
         outliers_removed = self.identify_outliers(transformed_training_data=transformed_training_data)
 
         # impute missing data and outlier values
-        clean_training_data = self.impute_missing_values(outliers_removed_data=outliers_removed, verbose=verbose)
+        clean_training_data = self.impute_missing_values(outliers_removed_data=outliers_removed, train=train, verbose=verbose)
 
-        if self.produce_eda_plots:
+        if self.produce_eda_plots and train:
             # produce distribution plots
             self.distribution_plots(clean_training_data=clean_training_data)
 
@@ -153,14 +157,24 @@ class PreprocessingPipeline():
             # produce time series decomposition plots
             self.time_series_decompositions(clean_training_data=clean_training_data)
 
-        return clean_training_data #, residual_components
+        # save datasets for future use
+        if self.save_datasets and train:
+            # define path to save clean dataset
+            if path_to_clean_dataset is None: path_to_clean_dataset = r"{}/Datasets/clean_training.csv".format(self.saved_directory)
+            clean_training_data.to_csv(path_to_clean_dataset)
+
+            # define path to holdout dataset
+            if path_to_holdout_dataset is None: path_to_holdout_dataset = r"{}/Datasets/holdout.csv".format(self.saved_directory)
+            holdout_test_data.to_csv(path_to_holdout_dataset)
+
+        return clean_training_data, holdout_test_data
 
     """
     This function takes a preliminary dataset and applies a 90-10 split to separate it into training and holdout 
         evaluation data. The training dataset is returned while the holdout dataset is saved to a local directory 
         for future use.
     """
-    def split_preliminary_dataset(self, prelim_dataset:pd.DataFrame=None, path_to_preliminary_dataset:str=None, path_to_holdout_dataset:str=None):
+    def split_preliminary_dataset(self, prelim_dataset:pd.DataFrame=None, path_to_preliminary_dataset:str=None):
         """
         Parameters:
         ----------
@@ -187,11 +201,6 @@ class PreprocessingPipeline():
 
         # remove test data from the rest of the dataset
         training_data = prelim_dataset[~prelim_dataset.index.isin(holdout_test_data.index)]
-
-        # save energy demand from holdout test dataset for later use 
-        if self.save_datasets:
-            if path_to_holdout_dataset is None: path_to_holdout_dataset = r"{}/Datasets/holdout.csv".format(self.saved_directory)
-            holdout_test_data.to_csv(path_to_holdout_dataset)
 
         return training_data, holdout_test_data
 
@@ -329,16 +338,14 @@ class PreprocessingPipeline():
         Missing values in categorical variables are replaced with their most common value for simplicity.
     """
     # function to fill missing values using univariate Prophet forecasting models
-    def impute_missing_values(self, outliers_removed_data:pd.DataFrame=None, path_to_clean_dataset:str=None, 
-        path_to_prophet_models:str=None, verbose:bool=True, **kwargs):
+    def impute_missing_values(self, outliers_removed_data:pd.DataFrame=None, train:bool=True,
+        verbose:bool=True, **kwargs):
         """
         Parameters:
         ----------
         outliers_removed_data (pandas.DataFrame): a dataset with outliers removed (replaced with NAN)
 
         path_to_clean_dataset (str): a path where the clean dataset (with missing values imputed) will be saved
-
-        path_to_prophet_models (str): a path to a folder where the fit Prophet models will be saved for later use
 
         Returns:
         ----------
@@ -351,43 +358,38 @@ class PreprocessingPipeline():
         # copy the structure of the input dataset for the output dataset
         clean_data = outliers_removed_data.copy()
 
-        # define path to save clean dataset
-        if path_to_clean_dataset is None: path_to_clean_dataset = r"{}/Datasets/clean_training.csv".format(self.saved_directory)
-
-        # define path to directory containing pickled Prophet models
-        if path_to_prophet_models is None: path_to_prophet_models = r"{}/Models/Prophet".format(self.saved_directory)
-
-        # fit a Prophet model for each time-series variable
+        # interpolate missing values using a Prophet model for each time-series variable
         time_series_variables = list(outliers_removed_data.select_dtypes("number").columns)
         for variable in time_series_variables:
             if verbose: print(f"Interpolating for variable {variable}")
             df = outliers_removed_data[[variable]].reset_index().rename(columns={"index":"ds", variable:"y"})
 
-            # define prophet model with all seasonality components and high regularization
-            model = Prophet(weekly_seasonality=True, yearly_seasonality=True, daily_seasonality=True, 
-                changepoint_prior_scale=0.001, seasonality_prior_scale=0.01)
-            
-            # fit model
-            model.fit(df)
+            if train:
+                # define prophet model with all seasonality components and high regularization
+                model = Prophet(weekly_seasonality=True, yearly_seasonality=True, daily_seasonality=True, 
+                    changepoint_prior_scale=0.001, seasonality_prior_scale=0.01)
+                
+                # fit model
+                model.fit(df)
+                
+                # save the model for imputing on new data
+                self.prophet_models[variable] = model
+            else:
+                try:
+                    model = self.prophet_models[variable]
+                except KeyError: raise SystemExit("""The ProcessingPipeline object must be applied with \"train\" set to 
+                    True at least once before it can be applied to unseen data.""")
 
             # calculate interpolations
             interpolated_values = model.predict(df)
             to_impute = outliers_removed_data[variable].isna().values
             clean_data.loc[to_impute, variable] = interpolated_values["yhat"][to_impute].values
-
-            # save fit model
-            # variable = variable.replace(r"/", "-")
-            # with open("{}/{}.pkl".format(path_to_prophet_models, variable), "wb") as file:
-            #     pkl.dump(model, file=file)
         
         for variable in [x for x in outliers_removed_data.columns if x not in time_series_variables]:
             if verbose: print(f"Interpolating for variable {variable}")
             to_impute = outliers_removed_data[variable].isna().values
             clean_data.loc[to_impute, variable] = clean_data[variable].mode()
 
-        # save clean dataset
-        if self.save_datasets:
-            clean_data.to_csv(path_to_clean_dataset)
         return clean_data
 
 
