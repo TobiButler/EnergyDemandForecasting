@@ -446,7 +446,8 @@ class Forecaster():
                 "Please ensure that the input dataset matches that used to train the LSTM model.")
 
         # define datetime index for the predictions being made
-        prediction_index = input_data.index[lstm_sequence_length+self.short_term_horizon:]
+        prediction_index = input_data.index[(lstm_sequence_length+self.short_term_horizon-1):] #+ datetime.timedelta(hours=self.short_term_horizon)
+        if prediction_index.shape[0] != expected_output_size: raise SystemExit("The number of short-term forecasts being made does not match the expected amount.")
 
         # prediction placeholders
         ensemble_point_forecasts = 0
@@ -829,7 +830,7 @@ class Forecaster():
         K = input_data.shape[1]  # Number of features
 
         # Calculate the number of sequences of length S that can be produced
-        num_sequences = x.shape[0] - (sequence_length + self.short_term_horizon)
+        num_sequences = x.shape[0] - (sequence_length + self.short_term_horizon-1)
 
         # Initialize an empty list to store the groups
         x_inputs = []
