@@ -189,8 +189,8 @@ page1_layout = html.Div([
             #     html.Img(id='distribution', style={'width': '50%', 'margin-right': '10px', 'display': 'inline-block'}),
             #     html.Img(id='scatterplot', style={'width': '50%', 'display': 'inline-block'})
             # ]),
-            html.Div(style={'display': 'flex', "width":"1500px", 'align-items': 'flex-start'}, children=[
-                html.Img(id='distribution', style={'width': '50%', 'margin-right': '50px', 'object-fit': 'contain'}),
+            html.Div(style={'display': 'flex', "width":"90%", 'align-items': 'flex-start'}, children=[
+                html.Img(id='distribution', style={'width': '50%', 'margin-right': '100px', 'object-fit': 'contain'}),
                 html.Img(id='scatterplot', style={'width': '50%', 'object-fit': 'contain'})
             ]),
             html.Br(),html.Br(),html.Br(),html.Br(),
@@ -205,15 +205,19 @@ page1_layout = html.Div([
                 value=dependent_variable,
                 style=dropdown_menu_style
             ),
-            html.Img(id='decomposition', style={'width':'750px'}, alt="Time series decomposition of variable selected above"),
+            # html.Img(id='decomposition', style={'width':'750px'}, alt="Time series decomposition of variable selected above"),
+            html.Div(style={'display': 'flex', "width":"95%", 'align-items': 'flex-start'}, children=[
+                html.Img(id='decomposition', style={'width': '50%', 'margin-right': '150px', 'object-fit': 'contain'}),
+                html.Img(id='decomposition-bar', style={'width': '50%', 'object-fit': 'contain'})
+            ]),
         ]),
         html.Br(),html.Br(),
     ]),
     html.Div(style={'width': '100%', 'display': 'flex', 'justify-content': 'space-between'}, children=[
-        html.Button('User Guide', id=navigation_button_ids['homepage'], n_clicks=0, style={'width': '25%'}),
-        html.Button('Reset This Page', id=navigation_button_ids['page1'], n_clicks=0, style={'width': '25%'}),
-        html.Button('Explaining the Model', id=navigation_button_ids['page2'], n_clicks=0, style={'width': '25%'}),
-        html.Button('The Final Product', id=navigation_button_ids['page3'], n_clicks=0, style={'width': '25%'}),
+        html.Button('User Guide', id=navigation_button_ids['homepage'], n_clicks=0, className="navigation_button"),
+        html.Button('Reset This Page', id=navigation_button_ids['page1'], n_clicks=0, className="navigation_button"),
+        html.Button('Explaining the Model', id=navigation_button_ids['page2'], n_clicks=0, className="navigation_button"),
+        html.Button('The Final Product', id=navigation_button_ids['page3'], n_clicks=0, className="navigation_button"),
     ])
 ])
 
@@ -224,35 +228,44 @@ page2_layout = html.Div([
     html.H1('Part 2: Cross Validation and Final Evaluation'),
     html.H3("Hyperparameter Tuning (under development)"),
     html.Div(["""The forecasting model for this pipeline was tuned using grid-search hyperparameter tuning and 5-Folds 
-              rolling cross validation. Details about this process will be provided in the next update."""]),
-    html.Div([], id="cross-validation-plot", style=explanation_text_style),
-    html.Br(),
+              rolling cross validation. Details about this process will be provided in the next update."""], style=explanation_text_style),
+    # html.Div([], id="cross-validation-plot", style=explanation_text_style),
+    # html.Br(),
     html.H3("Final Model Evaluation"),
     html.Div([r"""Once an optimal set of hyperparameters were obtained for the underlying forecasting model, its predictive 
               performance was evaluated on a holdout dataset containing the most recent 10% of Energy Demand Observations. 
+              Evaluation was conducted for both long-term forecasts and day-ahead forecasts and performance was measured using multple metrics.
               The time series plot below presents the forecasting model's predictions over this holdout time period along with 
               the actual observed values for comparison."""], style=explanation_text_style),
-    html.Div([], id="final-evaluation-plot"),
     html.Br(),
-    html.H5("Performance Reports"),
+    html.H5("Long-term Forecasting Evaluation"),
+    html.Div([], id="long-term-cv-plot"),
+    html.Br(),
+    html.H5("Table"),
     html.Div([r"""The following report describes the performance of the model compared to a baseline moving average using multiple metrics. 
               In future updates, forecasts from the EIA will be included for an additional comparison."""], style=explanation_text_style),
     html.Br(),
-    html.Div(children=[], id="final-evaluation-results"),
-    html.Div([
-        # TODO: include downloadable html report that is always up-to-date with this page...
-    html.A('Download Model Summary Performance Report (.html)', href='assets/performance_report.csv', download='forecasting_evaluation_table.csv')
-    ]),
+    html.Div(children=[], id="long-term-cv-results"),
     html.Br(), html.Br(),
+    html.H5("Day-ahead Forecasting Evaluation"),
+    html.Div([], id="short-term-cv-plot"),
+    html.Br(),
+    html.Div(children=[], id="short-term-cv-results"),
+    html.Br(),html.Br(),html.Br(),
     html.Div([r"""Lastly, in future updates, this section will include a report that describes the relative importance of each variable to 
             the model based on the results of a sensitivity analysis."""], style=explanation_text_style),
-    html.Div([], id="final-model-results"),
+    html.Img(id='sensitivity-analysis', style={'width':'750px'}, alt="Sensitivity Analysis for Forecasting Model"),
+    html.Br(),html.Br(),
+    html.Div([
+        # TODO: include downloadable html report that is always up-to-date with this page...
+    html.A('Download Model Summary Performance Report (.html)', href='assets/model_performance_report.html', download='Forecasting Model Performance Report.html')
+    ]),
     html.Br(),html.Br(),
     html.Div(style={'width': '100%', 'display': 'flex', 'justify-content': 'space-between'}, children=[
-        html.Button('User Guide', id=navigation_button_ids['homepage'], n_clicks=0, style={'width': '25%'}),
-        html.Button('Exploring the Data', id=navigation_button_ids['page1'], n_clicks=0, style={'width': '25%'}),
-        html.Button('Reset This Page', id=navigation_button_ids['page2'], n_clicks=0, style={'width': '25%'}),
-        html.Button('The Final Product', id=navigation_button_ids['page3'], n_clicks=0, style={'width': '25%'}),
+        html.Button('User Guide', id=navigation_button_ids['homepage'], n_clicks=0, className="navigation_button"),
+        html.Button('Exploring the Data', id=navigation_button_ids['page1'], n_clicks=0, className="navigation_button"),
+        html.Button('Reset This Page', id=navigation_button_ids['page2'], n_clicks=0, className="navigation_button"),
+        html.Button('The Final Product', id=navigation_button_ids['page3'], n_clicks=0, className="navigation_button"),
     ])
 ])
 
@@ -276,10 +289,10 @@ page3_layout = html.Div([
     html.A('Download Future Forecasts (.csv)', href='assets/future_forecasts.csv', download='NYHourlyResidentialEnergyDemandForecasts.csv'),
     html.Br(),html.Br(),html.Br(),
     html.Div(style={'width': '100%', 'display': 'flex', 'justify-content': 'space-between'}, children=[
-        html.Button('User Guide', id=navigation_button_ids['homepage'], n_clicks=0, style={'width': '25%'}),
-        html.Button('Exploring the Data', id=navigation_button_ids['page1'], n_clicks=0, style={'width': '25%'}),
-        html.Button('Explaining the Model', id=navigation_button_ids['page2'], n_clicks=0, style={'width': '25%'}),
-        html.Button('Reset This Page', id=navigation_button_ids['page3'], n_clicks=0, style={'width': '25%'}),
+        html.Button('User Guide', id=navigation_button_ids['homepage'], n_clicks=0, className="navigation_button"),
+        html.Button('Exploring the Data', id=navigation_button_ids['page1'], n_clicks=0, className="navigation_button"),
+        html.Button('Explaining the Model', id=navigation_button_ids['page2'], n_clicks=0, className="navigation_button"),
+        html.Button('Reset This Page', id=navigation_button_ids['page3'], n_clicks=0, className="navigation_button"),
     ])
 ])
 
@@ -350,33 +363,66 @@ def update_distribution_scatterplot(variable):
     return distribution_image, scatterplot_image
 
 # update time-series decomposition
-@app.callback(Output('decomposition', 'src'), [Input('decompositions-dropdown', 'value')])
+@app.callback([Output('decomposition', 'src'), Output('decomposition-bar', 'src')], [Input('decompositions-dropdown', 'value')])
 def update_decomposition_plot(variable):
     path = r"{}/Static Visuals/Decompositions/{}.png".format(saved_directory, variable)
     decomposition_image = daf.load_static_image(path, IMAGE_WIDTH)
-    return decomposition_image
+    path = r"{}/Static Visuals/Decompositions/{}_bar.png".format(saved_directory, variable)
+    decomposition_bar_image = daf.load_static_image(path, IMAGE_WIDTH)
+    return decomposition_image, decomposition_bar_image
 
 
-### Define Callbacks for Page 2 ###
+### Define Callbacks for Page 2 ### can combine most of these into one
 
 # update final model evaluation (on holdout data) plot
 @app.callback(
-    Output('final-evaluation-plot', 'children'),
+    Output('long-term-cv-plot', 'children'),
     [Input('url', 'pathname')]
 )
-def update_final_cv_plot(pathname):
+def update_long_term_cv_plot(pathname):
     if pathname == '/page-2':
-        with open(r"{}/Plotly Figures/Forecasting/best_model_cross_validation.pkl".format(saved_directory), 'rb') as file:
+        with open(r"assets/long_term_evaluation_plot.pkl", 'rb') as file:
             figure = pkl.load(file)
         evaluation_plot = dcc.Graph(figure=figure)
         return evaluation_plot
     
+@app.callback(
+    Output('short-term-cv-plot', 'children'),
+    [Input('url', 'pathname')]
+)
+def update_short_term_cv_plot(pathname):
+    if pathname == '/page-2':
+        with open(r"assets/short_term_evaluation_plot.pkl", 'rb') as file:
+            figure = pkl.load(file)
+        evaluation_plot = dcc.Graph(figure=figure)
+        return evaluation_plot
+    
+@app.callback(
+    Output('sensitivity-analysis', 'src'),
+    [Input('url', 'pathname')]
+)
+def update_sensitivity_analysis(pathname):
+    if pathname == '/page-2':
+        path = r"assets/sensitivity_analysis.png"
+        sensitivity_analysis = daf.load_static_image(path, IMAGE_WIDTH)
+        return sensitivity_analysis
+    
 # update table when user navigates to page 2
-@app.callback(Output('final-evaluation-results', 'children'), [Input('url', 'pathname')])
-def update_table(pathname):
+@app.callback(Output('long-term-cv-results', 'children'), [Input('url', 'pathname')])
+def update_long_term_table(pathname):
     if pathname == '/page-2':
         # Read new CSV file or generate new DataFrame
-        eval_df = pd.read_csv('assets/performance_report.csv')
+        eval_df = pd.read_csv('assets/long_term_performance_report.csv')
+        columns = [{'name': col, 'id': col} for col in eval_df.columns]
+        table = dash_table.DataTable(id="evaluation-table", data=eval_df.to_dict('records'), columns=columns)
+        return [html.H5("Model Evaluation Results"), table]
+    
+# update table when user navigates to page 2
+@app.callback(Output('short-term-cv-results', 'children'), [Input('url', 'pathname')])
+def update_short_term_table(pathname):
+    if pathname == '/page-2':
+        # Read new CSV file or generate new DataFrame
+        eval_df = pd.read_csv('assets/short_term_performance_report.csv')
         columns = [{'name': col, 'id': col} for col in eval_df.columns]
         table = dash_table.DataTable(id="evaluation-table", data=eval_df.to_dict('records'), columns=columns)
         return [html.H5("Model Evaluation Results"), table]

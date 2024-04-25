@@ -1,0 +1,3 @@
+changepoint_prior_scale,seasonality_prior_scale,point_var_lags,minimum_error_prediction,error_trend,MSE,WMSE
+0.5,0.5,10,100.0,0.01,4946569385.015922,3121248574.188004
+0.5,0.5,10,100.0,0.1,4946569385.015924,3348695656.703945
