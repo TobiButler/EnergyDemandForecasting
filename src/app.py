@@ -250,14 +250,13 @@ page2_layout = html.Div([
     html.H5("Day-ahead Forecasting Evaluation"),
     html.Div([], id="short-term-cv-plot"),
     html.Br(),
-    html.Div(children=[], id="short-term-cv-results"),
+    html.Div(style={'width': '75%', 'display': 'flex', 'justify-content': 'space-between'}, children=[], id="short-term-cv-results"),
     html.Br(),html.Br(),html.Br(),
     html.Div([r"""Lastly, in future updates, this section will include a report that describes the relative importance of each variable to 
             the model based on the results of a sensitivity analysis."""], style=explanation_text_style),
     html.Img(id='sensitivity-analysis', style={'width':'750px'}, alt="Sensitivity Analysis for Forecasting Model"),
     html.Br(),html.Br(),
     html.Div([
-        # TODO: include downloadable html report that is always up-to-date with this page...
     html.A('Download Model Summary Performance Report (.html)', href='assets/model_performance_report.html', download='Forecasting Model Performance Report.html')
     ]),
     html.Br(),html.Br(),
