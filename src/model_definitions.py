@@ -551,7 +551,7 @@ class Forecaster():
         This method does not cross validate an lstm model. See cross_validate_lstm() for that.
     """
     def cross_validate_pv(self, num_folds:int, clean_training_data:pd.DataFrame, dependent_variable:str, pv_hyperparameters:dict=None,
-        strong_predictors:list[str]=[], return_predictions:bool=False):
+        strong_predictors:list[str]=[], return_predictions:bool=False, verbose_validation:bool=False):
         """
         Parameters:
         ----------
@@ -592,7 +592,9 @@ class Forecaster():
             model_mse_values = []
             model_wmse_values = []
 
+        if verbose_validation: counter = 1
         for train_index, test_index in tscv.split(clean_training_data):
+            if verbose_validation: print("Training Prophet-VAR model for CV Fold {} out of {}.".format(counter, num_folds))
             train_data, test_data = clean_training_data.iloc[train_index], clean_training_data.iloc[test_index]
 
             # fit model on the train_data
@@ -618,6 +620,10 @@ class Forecaster():
 
                 model_mse_values.append(mse)
                 model_wmse_values.append(wmse)
+            
+            if verbose_validation:
+                print("Validation Fold {} out of {}. MSE: {:.3f}, WMSE: {:.3f}.".format(counter, num_folds, mse, wmse))
+                counter = counter+1
 
         if return_predictions:
             return model_predictions, truth_values
@@ -647,10 +653,10 @@ class Forecaster():
             model_mse_values = []
             model_wmse_values = []
 
-        counter=1
+        if verbose_validation: counter=1
         for train_index, test_index in tscv.split(clean_training_data):
             if verbose_validation:
-                print("Training Model for CV Fold {} out of {}.".format(counter, num_folds))
+                print("Training LSTM for CV Fold {} out of {}.".format(counter, num_folds))
             train_data, test_data = clean_training_data.iloc[train_index], clean_training_data.iloc[test_index]
 
             # format training dataset
@@ -658,7 +664,7 @@ class Forecaster():
                 batch_size=lstm_hyperparameters["batch_size"], forecasting_steps_ahead=self.short_term_horizon, proportion_validation=early_stopping_prop)
 
             # format validation dataset
-            validation_last_train_index = -(lstm_hyperparameters["sequence_length"]+self.short_term_horizon)
+            validation_last_train_index = -(lstm_hyperparameters["sequence_length"]+self.short_term_horizon-1)
             temp_test_data = pd.concat([train_data[validation_last_train_index:], test_data], axis=0) # add last sequence length of the training data to start of validation data
             # return test_data
             _, validation_loader, _, _  = self.format_lstm_data(temp_test_data, sequence_length=lstm_hyperparameters["sequence_length"], batch_size=lstm_hyperparameters["batch_size"], 
@@ -717,9 +723,8 @@ class Forecaster():
                     model_mse_values.append(mse)
                     model_wmse_values.append(wmse)
                 if verbose_validation:
-                    print("Validation Fold {} out of {}. MSE: {}, WMSE: {}.".format(counter, num_folds, mse, wmse))
-
-                counter = counter + 1
+                    print("Validation Fold {} out of {}. MSE: {:.3f}, WMSE: {:.3f}.".format(counter, num_folds, mse, wmse))
+                    counter = counter + 1
 
         if return_predictions:
             return model_predictions, truth_values
