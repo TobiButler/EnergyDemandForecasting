@@ -245,12 +245,12 @@ page2_layout = html.Div([
     html.Div([r"""The following report describes the performance of the model compared to a baseline moving average using multiple metrics. 
               In future updates, forecasts from the EIA will be included for an additional comparison."""], style=explanation_text_style),
     html.Br(),
-    html.Div(children=[], id="long-term-cv-results"),
+    html.Div(style={'width': '100%'}, children=[], id="long-term-cv-results"),
     html.Br(), html.Br(),
     html.H5("Day-ahead Forecasting Evaluation"),
     html.Div([], id="short-term-cv-plot"),
     html.Br(),
-    html.Div(style={'width': '75%', 'display': 'flex', 'justify-content': 'space-between'}, children=[], id="short-term-cv-results"),
+    html.Div(style={'width': '100%'}, children=[], id="short-term-cv-results"),
     html.Br(),html.Br(),html.Br(),
     html.Div([r"""Lastly, in future updates, this section will include a report that describes the relative importance of each variable to 
             the model based on the results of a sensitivity analysis."""], style=explanation_text_style),
@@ -413,7 +413,9 @@ def update_long_term_table(pathname):
         # Read new CSV file or generate new DataFrame
         eval_df = pd.read_csv('assets/long_term_performance_report.csv')
         columns = [{'name': col, 'id': col} for col in eval_df.columns]
-        table = dash_table.DataTable(id="evaluation-table", data=eval_df.to_dict('records'), columns=columns)
+        table = dash_table.DataTable(id="evaluation-table", data=eval_df.to_dict('records'), columns=columns,
+            style_table={"width": "50%"}, style_header={"fontWeight": "bold", "textAlign": "center"}, style_cell={
+            "whiteSpace": "normal", "textAlign": "left"})
         return [html.H5("Model Evaluation Results"), table]
     
 # update table when user navigates to page 2
@@ -423,7 +425,9 @@ def update_short_term_table(pathname):
         # Read new CSV file or generate new DataFrame
         eval_df = pd.read_csv('assets/short_term_performance_report.csv')
         columns = [{'name': col, 'id': col} for col in eval_df.columns]
-        table = dash_table.DataTable(id="evaluation-table", data=eval_df.to_dict('records'), columns=columns)
+        table = dash_table.DataTable(id="evaluation-table", data=eval_df.to_dict('records'), columns=columns,
+            style_table={"width": "50%"}, style_header={"fontWeight": "bold", "textAlign": "center"}, style_cell={
+            "whiteSpace": "normal", "textAlign": "left"})
         return [html.H5("Model Evaluation Results"), table]
         
 
