@@ -24,11 +24,32 @@ EARLIEST_START_DATE:str = np.datetime64("2018-01-01")
 LATEST_END_DATE:str = np.datetime64("2025-01-01")
 
 """
-This main function takes starting date and ending date and retrieves data related to energy demand between those dates.
+This main function takes starting date and ending date and retrieves data related to residential energy demand, weather, 
+    and economic indicators in New York City between those dates. Returns a preliminary dataset as a dataframe.
 """
 def main(start, end, eia_api_key:str=None, path_to_directory:str=None, save_dataset:bool=True, verbose:bool=True):
     """
-    
+    Parameters:
+    ----------
+    start (str or np.datetime64): The datetime corresponding to the first observation in the data. This may be adjusted if 
+        too early of a start value is provided.
+
+    end (str or np.datetime64): The datetime corresponding to the last observation in the data. This may be adjusted if too 
+        late of an end value is provided.
+
+    eia_api_key (str): An API key for the EIA's web api. If not provided, this method will look for one in the project 
+        repository's configuration files.
+
+    path_to_directory (str): a filepath where the produced dataset will be saved. If not provided, a default path will be used.
+
+    save_dataset (bool): determines whether to save the produced dataset to the project repository. True by default.
+
+    verbose (bool): determines whether print statements are used to update the user as the method runs.
+
+    Returns:
+    ----------
+    pd.DataFrame: A compiled dataset containing energy demand, weather, and economic variables on an hourly timescale 
+        local to New York City
     """
     # convert start and end arguments to datetimes
     if type(start) != np.datetime64:

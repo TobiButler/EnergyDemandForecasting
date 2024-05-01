@@ -41,7 +41,10 @@ class PreprocessingPipeline():
         saved_directory_name (str): the name of a directory that will be created to hold the clean dataset produced, forecasting models, 
             and optional exploratory data analysis visualizations.
 
-        produce_plots (bool): Determines whether EDA plots are produced and saved in the local directory.
+        save_datasets (bool): Determines whether datasets produced by any part of this class (including clean data and holdout datasets) 
+            are saved to saved_directory_name
+
+        produce_plots (bool): Determines whether EDA plots are produced and saved in saved_directory_name.
         """
         self.saved_directory = saved_directory_name
         self.produce_eda_plots = produce_eda_plots
@@ -75,7 +78,6 @@ class PreprocessingPipeline():
                 if not os.path.exists(subsubdir_path): os.makedirs(subsubdir_path)
 
 
-
     """
     A method to run all data cleaning and processing functions of the class. It also has an optional 
         argument to produce exploratory data analysis visualizations.
@@ -90,14 +92,23 @@ class PreprocessingPipeline():
 
         path_to_prelim_dataset (str): a path to a csv file containing the dataset described above.
 
+        split_into_train_holdout (bool): determines whether the last 10% of the preliminary_dataset is separated from the leading 90% and 
+            returned without any processing alongside the cleaned training data.
+
+        path_to_holdout_dataset (str): a filepath where the holdout data will try to be saved
+
+        train (bool): determines whether this method is able to save datasets and figures to the class's saved_data_directory. This should 
+            be set to false when applying the class to evaluation or unseen data.
+
+        verbose (bool): determines whether print statements are used to update the user at each step of the process.
+
         Returns:
         ----------
         pandas.DataFrame: a clean dataset with reduced outliers and no missing values. This dataset is well-suited for exploratory 
             data analysis and predictive modeling with a model that is able to capture trend and seasonal patterns (TBATS, Holtz-Winters, 
             Prophet, LSTM, N-BEATS, etc.)
 
-        pandas.DataFrame: Also a clean dataset but with all trend and seasonal components removed from each variable. This dataset is suited 
-            for predictive modeling by a autoregressive model that does not capture trend or seasonal patterns (ARIMA, VAR, etc.)
+        pandas.DataFrame: A holdout dataset with no processing done.
         """
         # check that either the dataset or path are correctly formatted
         if (type(preliminary_dataset)!=pd.DataFrame) and (type(path_to_prelim_dataset)!=str):
@@ -168,6 +179,7 @@ class PreprocessingPipeline():
             holdout_test_data.to_csv(path_to_holdout_dataset)
 
         return clean_training_data, holdout_test_data
+    
 
     """
     This function takes a preliminary dataset and applies a 90-10 split to separate it into training and holdout 
@@ -597,20 +609,12 @@ class PreprocessingPipeline():
             
             # fit model
             model.fit(df)
-
-            # # calculate interpolations
-            # interpolated_values = model.predict(df)
-            # to_impute = outliers_removed_data[variable].isna().values
-            # clean_data.loc[to_impute, variable] = interpolated_values["yhat"][to_impute].values
-            # # file_variable = variable.replace(r"/", "-")
-            # # with open(r"{}/{}.pkl".format(path_to_prophet_models, file_variable), "rb") as file:
-            # #     model = pkl.load(file=file)
+            
+            # make Prophet predictions
             forecasts = model.predict(df)
             forecasts.index = pd.to_datetime(clean_training_data.index)
             forecasts['y'] = df['y'].values
             forecasts["residual"] = df["y"].values - forecasts["yhat"].values
-
-            if save_residuals: clean_training_data.loc[:,variable] = forecasts["residual"].values
 
             if produce_plots and self.produce_eda_plots:
                 # calculate correlation coefficients between components and time series
@@ -619,7 +623,7 @@ class PreprocessingPipeline():
                 weekly_correlation = np.corrcoef(forecasts['y'], forecasts['weekly'])[0,1]
                 daily_correlation = np.corrcoef(forecasts['y'], forecasts['daily'])[0,1]
                 residual_correlation = np.corrcoef(forecasts['y'], forecasts['residual'])[0,1]
-                correlation_info = np.array([trend_correlation, yearly_correlation, weekly_correlation, daily_correlation, residual_correlation])
+                correlation_info = np.abs(np.array([trend_correlation, yearly_correlation, weekly_correlation, daily_correlation, residual_correlation]))
                 correlation_info = correlation_info/np.sum(correlation_info)
                 
                 # plot relative correlation coefficients
@@ -698,11 +702,6 @@ class PreprocessingPipeline():
                 save_png_encoded(r'{}/{}.png'.format(path_to_plots, filename_variable), fig)
                 plt.close()
 
-        # if save_residuals and self.save_datasets:
-        #     if path_to_residual_dataset is None: path_to_residual_dataset = r"{}/Datasets/residuals.csv".format(self.saved_directory)
-        #     clean_training_data.to_csv(path_to_residual_dataset)
-
-        # return clean_training_data # really the residuals
 
 
     # obtain time series residuals from decompositions

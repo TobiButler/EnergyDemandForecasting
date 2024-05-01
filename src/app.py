@@ -130,7 +130,7 @@ scatterplot_dropdown_options = [{"label":variable, "value":variable} for variabl
 
 # specify the directory path for scatterplots
 decomposition_directory = r"{}/Static Visuals/Decompositions".format(saved_directory)
-variables = [x[:-4] for x in os.listdir(decomposition_directory)] # Get a list of associated variables
+variables = [x[:-4] for x in os.listdir(decomposition_directory) if "_bar" not in str(x)] # Get a list of associated variables
 decomposition_dropdown_options = [{"label":variable, "value":variable} for variable in variables]
 
 
@@ -144,7 +144,8 @@ page1_layout = html.Div([
             economic related variables. Hourly weather data was recorded by the New York Central Park weather 
             station and was gathered from the NOAA. Monthly economic inidcators for New York City were obtained 
             from the Bureau of Labor Statistics.""", style=explanation_text_style),
-        html.Br(),
+        html.Br(), html.Br(),
+        html.H3("Raw Time Series Plots"),
         html.Div("""The following figure shows a raw plot of the selected time series variable. The start date 
             is the earliest point at which hourly residential energy demand was available through the NYISO.
             Other variables can be selected from the dropdown menu to see their raw time series distribution.""", 
@@ -159,7 +160,7 @@ page1_layout = html.Div([
             ),
             html.Div([], id='raw-time-series'),
             html.Br(),html.Br(),html.Br(),
-            html.H4("Identifying Outliers"),
+            html.H3("Outlier Identification"),
             html.Div("""For each of the time series variables, outliers were detected using moving average distribution estimation, similar to that described by Blázquez-García et al. (2022).
                 A conservative probability threshold of 0.001 was used alongside an N of 1000 in order to detect observations with extremely low probabilities of 
                 being generated from the same distribution as the nearest 1000 observations. Once identified, outliers were temporarily replaced with missing values 
@@ -173,7 +174,7 @@ page1_layout = html.Div([
             ),
             html.Div([], id='outliers'),
             html.Br(),html.Br(),html.Br(),html.Br(),
-            html.H4("Distribution Plot and Scatterplot"),
+            html.H3("Distributions and Bivariate Relationships"),
             html.Div(r"""For all variables in the dataset, distributions were produced to help recognize any ill-conditioned distributions that required transformations, 
                 and scatterplots between them and the dependent variable, Energy Demand (MWH), were produced to help understand the types of relationships 
                 (linear or nonlinear) present in the dataset. These two types of visuals are shown below for the variable selected below. By default, when 
@@ -185,16 +186,12 @@ page1_layout = html.Div([
                 value=dependent_variable,
                 style=dropdown_menu_style
             ),
-            # html.Div([
-            #     html.Img(id='distribution', style={'width': '50%', 'margin-right': '10px', 'display': 'inline-block'}),
-            #     html.Img(id='scatterplot', style={'width': '50%', 'display': 'inline-block'})
-            # ]),
             html.Div(style={'display': 'flex', "width":"90%", 'align-items': 'flex-start'}, children=[
                 html.Img(id='distribution', style={'width': '50%', 'margin-right': '100px', 'object-fit': 'contain'}),
                 html.Img(id='scatterplot', style={'width': '50%', 'object-fit': 'contain'})
             ]),
             html.Br(),html.Br(),html.Br(),html.Br(),
-            html.H4("Time Series Decomposition Plots"),
+            html.H3("Time Series Decomposition Plots"),
             html.Div("""Lastly, it is important to understand how each time series variable, especially the dependent variable, is impacted by trend and seasonality components. 
                 Below, time series decomposition plots estimating trend, yearly seasonality, weekly seasonality, and daily seasonality are provided for each time series variable 
                 in the dataset.""", style=explanation_text_style),
@@ -207,8 +204,8 @@ page1_layout = html.Div([
             ),
             # html.Img(id='decomposition', style={'width':'750px'}, alt="Time series decomposition of variable selected above"),
             html.Div(style={'display': 'flex', "width":"95%", 'align-items': 'flex-start'}, children=[
-                html.Img(id='decomposition', style={'width': '50%', 'margin-right': '150px', 'object-fit': 'contain'}),
-                html.Img(id='decomposition-bar', style={'width': '50%', 'object-fit': 'contain'})
+                html.Img(id='decomposition', style={'width': '25%', 'margin-right': '200px', 'object-fit': 'contain'}),
+                html.Img(id='decomposition-bar', style={'width': '40%', 'object-fit': 'contain'})
             ]),
         ]),
         html.Br(),html.Br(),
@@ -225,35 +222,70 @@ page1_layout = html.Div([
 
 # Define page 2 default layout
 page2_layout = html.Div([
-    html.H1('Part 2: Cross Validation and Final Evaluation'),
-    html.H3("Hyperparameter Tuning (under development)"),
-    html.Div(["""The forecasting model for this pipeline was tuned using grid-search hyperparameter tuning and 5-Folds 
-              rolling cross validation. Details about this process will be provided in the next update."""], style=explanation_text_style),
-    # html.Div([], id="cross-validation-plot", style=explanation_text_style),
-    # html.Br(),
-    html.H3("Final Model Evaluation"),
-    html.Div([r"""Once an optimal set of hyperparameters were obtained for the underlying forecasting model, its predictive 
-              performance was evaluated on a holdout dataset containing the most recent 10% of Energy Demand Observations. 
-              Evaluation was conducted for both long-term forecasts and day-ahead forecasts and performance was measured using multple metrics.
-              The time series plot below presents the forecasting model's predictions over this holdout time period along with 
-              the actual observed values for comparison."""], style=explanation_text_style),
+    html.H1('Part 2: Forecasting Model Evaluation'),
+    # html.H3("Hyperparameter Tuning (under development)"),
+    # html.Div(["""The forecasting model for this pipeline was tuned using grid-search hyperparameter tuning and 5-Folds 
+    #           rolling cross validation. Details about this process will be provided in a future update."""], style=explanation_text_style),
+    html.H3("Forecasting Model Architecture"),
+    html.Div([r"""The forecasting ensemble developed for this project is a combination of Prophet, vector autoregressive (VAR) and long short-term memory (LSTM) architectures. """], style=explanation_text_style),
     html.Br(),
-    html.H5("Long-term Forecasting Evaluation"),
+    html.H4("Prophet"),
+    html.Div([r"""Prophet is a forecasting tool developed by the data science team at Facebook. It is designed to handle time-series data with multiple strong 
+        seasonal patterns through the use of fourier series. The model looks specifically at daily, weekly, and yearly patterns, and fits a sinusoidal fourier series 
+        to each detected seasonal component. Then, each series can be summed to produce a new series that represents the whole time series. As a result, Prophet models 
+        are particularly useful for analyzing the various seasonal components of a time series and for forecasting in settings where datasets may have irregularities, 
+        missing data, or outliers (Taylor & Letham, 2017)."""], style=explanation_text_style),
+    html.Br(),html.Br(),
+    html.H4("VAR"),
+    html.Div([r"""The VAR statistical forecasting model is a generalization of the autoregressive moving average (ARMA) model, designed for analyzing multivariate 
+        time series data. In a VAR model, each variable is modeled as a linear function of its past values and the past values of other variables in the system, but 
+        there are no moving average terms. The order of a VAR model, often denoted as the hyperparameter p, indicates the number of lagged values included in the model 
+        for each variable. For example, a VAR(2) model uses the two most recent observations for each variable to predict the subsequent vector of observations (Guefano et al., 2021). 
+        In this project, a VAR model has been defined to produce point forecasts from the residual components of each time series variable (as estimated by the Prophet models) 
+        and another VAR model has been defined to produce variance or error forecasts (prediction intervals). """], style=explanation_text_style),
+    html.Br(),html.Br(),
+    html.H4("LSTM"),
+    html.Div([r"""The LSTM is a RNN variant designed with an additional type of cell, called a forget gate, that helps to mitigate the effects of the vanishing gradient problem. 
+        It specializes in handling sequential data and is widely used for natural language processing and time series forecasting. LSTM models have been shown to be capable of 
+        outperforming statistical autoregressive models on both short-term and long-term forecasts, but generally require larger amounts of data and specially tuned hyperparameters 
+        in order to do so (Kaur et al., 2022). In addition to the regular hidden state and memory state cells that enable RNNs to learn temporal patterns, adding dropout to the 
+        network can be used to mimic the behavior of a Bayesian network, in which predictions are probabilistic rather than deterministic (Gal & Ghahramani, 2015). In this project, 
+        a LSTM model will be trained and tuned using the clean dataset and an Adam optimization algorithm. The LSTM will be defined to predict day-ahead predictions, and the learning 
+        rate, hidden state size, input size, and dropout hyperparameters will all be tuned using five folds rolling window cross validation. Probabilistic forecasts will be obtained by 
+        repeatedly applying the LSTM 100 times to obtain an estimated prediction interval over its point forecasts."""], style=explanation_text_style),
+    html.Br(),html.Br(),html.Br(),
+    html.H3("Evaluation"),
+    html.Div([r"""An optimal set of hyperparameters were obtained for each forecasting architecture described above using five-fold rolling cross validation. Below, the long-term and 
+            short-term forecasting capabilities of the resulting ensemble is evaluated on a holdout dataset containing the most recent 10% of Energy Demand Observations. 
+            Performance was measured using multple accuracy metrics and compared to baseline models using a Wilcoxon Signed Rank test."""], style=explanation_text_style),
+    html.Br(),html.Br(),
+    html.H4("Long-term Forecasting Evaluation"),
+    html.Div([r"""The time series plot below presents the forecasting ensemble's one-shot (long-term) predictions over the holdout time period along with 
+        the actual observed values for comparison."""], style=explanation_text_style),
     html.Div([], id="long-term-cv-plot"),
     html.Br(),
-    html.H5("Table"),
-    html.Div([r"""The following report describes the performance of the model compared to a baseline moving average using multiple metrics. 
-              In future updates, forecasts from the EIA will be included for an additional comparison."""], style=explanation_text_style),
+    html.H4("Long-term Evaluation Results"),
+    html.Div([r"""The following report describes the performance of the ensemble's long-term forecasts compared to a baseline yearly moving average using multiple metrics."""], style=explanation_text_style),
     html.Br(),
     html.Div(style={'width': '100%'}, children=[], id="long-term-cv-results"),
     html.Br(), html.Br(),
-    html.H5("Day-ahead Forecasting Evaluation"),
+    html.H4("Day-ahead Forecasting Evaluation"),
+    html.Div([r"""The time series plot below presents the forecasting ensemble's daily updated (short-term) predictions over the holdout time period along with 
+        the actual observed values for comparison."""], style=explanation_text_style),
     html.Div([], id="short-term-cv-plot"),
+    html.Br(),
+    html.H4("Day-ahead Evaluation Results"),
+    html.Div([r"""The following report describes the performance of the ensemble's day-ahead forecasts compared to a baseline daily moving average and comppared to EIA forecasts using 
+        multiple metrics. The EIA forecasts are day-ahead forecasts provided by the EIA through their open-access database."""], style=explanation_text_style),
     html.Br(),
     html.Div(style={'width': '100%'}, children=[], id="short-term-cv-results"),
     html.Br(),html.Br(),html.Br(),
-    html.Div([r"""Lastly, in future updates, this section will include a report that describes the relative importance of each variable to 
-            the model based on the results of a sensitivity analysis."""], style=explanation_text_style),
+    html.H3("Sensitivity Analysis"),
+    html.Div([r"""A permutation analysis was conducted to estimate the relative contributions of each variable to the effectiveness of the forecasting ensemble. In this analysis, 
+        variables within the holdout evaluation dataset were permuted one at a time and the resulting decreases in the MSE loss function were normalized to sum to 1. The results of 
+        this permutation feature importance analysis is shown below. Please note that this is a model-dependent approach to estimating feature importances and that the impacts from 
+        strongly related predictor variables are not being taken into account."""], style=explanation_text_style),
+    html.Br(),
     html.Img(id='sensitivity-analysis', style={'width':'750px'}, alt="Sensitivity Analysis for Forecasting Model"),
     html.Br(),html.Br(),
     html.Div([

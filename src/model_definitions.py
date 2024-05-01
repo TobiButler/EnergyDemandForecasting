@@ -54,6 +54,7 @@ class LSTM(t.nn.Module):
         self.training_sequence_length = training_sequence_length
         self.input_scaling = None
         self.input_time_scaling = None
+        self.variance = None
 
     """
     This method runs the network. It evaluates the network as a function to a batch of input samples with size 
@@ -149,19 +150,6 @@ class Forecaster():
             # fit lstm model
             if verbose: print("Fitting LSTM Model")
             lstm = self.format_fit_lstm(clean_training_data, proportion_validation=0.1, lstm_device=lstm_device, verbose=verbose, **hyperparameters)
-
-
-    """
-    This is a private method that fits a short-term LSTM model using all variables in the dataset provided. The forecasting horizon that the LSTM 
-        is trained to predict is a class attribute.
-    """
-    def _fit_lstm(self, clean_training_data:pd.DataFrame, dependent_variable:str, lr:float=0.0005, dropout=0.5,
-        batch_size=100, sequence_length=3*7*24, patience=4, loss_scalar=1e4, **kwargs):
-        """
-        
-        """
-        pass
-        self.lstm = None
 
 
     """
@@ -529,6 +517,7 @@ class Forecaster():
                     (self.lstm.input_scaling[1][self.dependent_variable]-self.lstm.input_scaling[0][self.dependent_variable]) + self.lstm.input_scaling[0][self.dependent_variable])
                     error_forecasts.append(error_forecast)
                 error_forecasts = np.array(error_forecasts)
+                error_forecasts = error_forecasts/np.sum(error_forecasts)*error_forecasts.shape[0]*self.lstm.variance
                 # return error_forecasts
 
             # weight by ensemble weight
@@ -955,6 +944,24 @@ class Forecaster():
                     if counter >= patience:
                         if verbose: print("Early stopping!")
                         break
+        if verbose:
+            print("Estimating confidence intervals...")   
+        squared_errors = []
+        with t.no_grad():
+            for i, (inputs, time_inputs, targets) in enumerate(train_loader):
+                # put all batches on the correct device
+                inputs = inputs.to(device=device)
+                time_inputs = time_inputs.to(device=device)
+                targets = (targets.to(device=device) * 
+                    (self.lstm.input_scaling[1][self.dependent_variable]-self.lstm.input_scaling[0][self.dependent_variable]) + self.lstm.input_scaling[0][self.dependent_variable])
+
+                # evaluate model
+                outputs = (model(inputs, time_inputs, bayesian_predict=False)[:,0] * 
+                    (self.lstm.input_scaling[1][self.dependent_variable]-self.lstm.input_scaling[0][self.dependent_variable]) + self.lstm.input_scaling[0][self.dependent_variable])
+                squared_errors.append(((outputs-targets)**2).cpu().numpy())
+            model.variance = np.mean(np.concatenate(squared_errors))
+
+        
 
         # Restore the best performing model
         if best_model_state is not None:
