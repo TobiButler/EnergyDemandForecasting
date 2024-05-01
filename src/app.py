@@ -106,7 +106,7 @@ landing_page_layout = html.Div([
     html.Div(style={'width': '100%', 'display': 'flex', 'justify-content': 'space-between'}, children=[
         html.Button('Reset This Page', id=navigation_button_ids['homepage'], n_clicks=0, className="navigation_button"),
         html.Button('Exploring the Data', id=navigation_button_ids['page1'], n_clicks=0, className="navigation_button"),
-        html.Button('Explaining the Model', id=navigation_button_ids['page2'], n_clicks=0, className="navigation_button"),
+        html.Button('Evaluation Results', id=navigation_button_ids['page2'], n_clicks=0, className="navigation_button"),
         html.Button('The Final Product', id=navigation_button_ids['page3'], n_clicks=0, className="navigation_button"),
     ]),
     html.Br()
@@ -213,7 +213,7 @@ page1_layout = html.Div([
     html.Div(style={'width': '100%', 'display': 'flex', 'justify-content': 'space-between'}, children=[
         html.Button('User Guide', id=navigation_button_ids['homepage'], n_clicks=0, className="navigation_button"),
         html.Button('Reset This Page', id=navigation_button_ids['page1'], n_clicks=0, className="navigation_button"),
-        html.Button('Explaining the Model', id=navigation_button_ids['page2'], n_clicks=0, className="navigation_button"),
+        html.Button('Evaluation Results', id=navigation_button_ids['page2'], n_clicks=0, className="navigation_button"),
         html.Button('The Final Product', id=navigation_button_ids['page3'], n_clicks=0, className="navigation_button"),
     ])
 ])
@@ -322,7 +322,7 @@ page3_layout = html.Div([
     html.Div(style={'width': '100%', 'display': 'flex', 'justify-content': 'space-between'}, children=[
         html.Button('User Guide', id=navigation_button_ids['homepage'], n_clicks=0, className="navigation_button"),
         html.Button('Exploring the Data', id=navigation_button_ids['page1'], n_clicks=0, className="navigation_button"),
-        html.Button('Explaining the Model', id=navigation_button_ids['page2'], n_clicks=0, className="navigation_button"),
+        html.Button('Evaluation Results', id=navigation_button_ids['page2'], n_clicks=0, className="navigation_button"),
         html.Button('Reset This Page', id=navigation_button_ids['page3'], n_clicks=0, className="navigation_button"),
     ])
 ])
