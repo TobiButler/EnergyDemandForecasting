@@ -1,4 +1,4 @@
 ,MSE,Weighted MSE,MAE,MAPE,Wilcoxon Test p-value
-Forecasting Pipeline,908700.32,908575.29,820.12,0.16,
-Baseline Moving Avg,350660.8,350660.8,512.26,0.1,1.0
-EIA Forecasts,115596.45,,291.92,0.06,1.0
+Forecasting Pipeline,143397.79,143364.51,289.07,0.06,
+Baseline Moving Avg,350660.8,350660.8,512.26,0.1,<0.01
+EIA Forecasts,115596.45,,291.92,0.06,<0.01

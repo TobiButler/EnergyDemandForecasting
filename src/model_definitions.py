@@ -149,7 +149,7 @@ class Forecaster():
         if fit_lstm:
             # fit lstm model
             if verbose: print("Fitting LSTM Model")
-            lstm = self.format_fit_lstm(clean_training_data, proportion_validation=0.1, lstm_device=lstm_device, verbose=verbose, **hyperparameters)
+            lstm = self.format_fit_lstm(clean_training_data, dependent_variable=dependent_variable, proportion_validation=0.1, lstm_device=lstm_device, verbose=verbose, **hyperparameters)
 
 
     """
@@ -492,7 +492,7 @@ class Forecaster():
             # format input data for LSTM
             if lstm_sequence_length is None: lstm_sequence_length = self.lstm.training_sequence_length
             loader, _, _, _ = self.format_lstm_data(input_data, sequence_length=lstm_sequence_length, batch_size=input_data.shape[0]-lstm_sequence_length, 
-                forecasting_steps_ahead=self.short_term_horizon, proportion_validation=0)
+                forecasting_steps_ahead=self.short_term_horizon, proportion_validation=0, eval=True)
             with t.no_grad():
                 inputs, time_inputs = [],[]
                 for input, time_input, _ in loader:
@@ -784,8 +784,7 @@ class Forecaster():
         K is the number of variables in the original dataset, and T is the number of added time encodings (current hard coded to 3). It returns DataLoaders and the 
         normalization factors needed to reproduce the original data.
     """
-    def format_lstm_data(self, clean_data:pd.DataFrame, sequence_length:int, batch_size:int, proportion_validation:float=0, 
-        input_scaling:tuple=None, input_time_scaling:tuple=None, **kwargs):
+    def format_lstm_data(self, clean_data:pd.DataFrame, sequence_length:int, batch_size:int, proportion_validation:float=0, eval:bool=False, **kwargs):
         """
         Parameters:
         df (pd.DataFrame): a dataframe with all variables to be included in the model. Should not contain time embeddings. Must have a datetime-like index.
@@ -800,18 +799,16 @@ class Forecaster():
         input_data = pd.get_dummies(clean_data, drop_first=True).astype("float32")
 
         # calculate normalization factors. Also save these as they will be used later to transform output back to actual values.
-        if input_scaling is None:
+        if not eval:
             input_min_vals = np.min(input_data, axis=0) 
             input_max_vals = np.max(input_data, axis=0)
-        else:
-            input_min_vals = input_scaling[0]
-            input_max_vals = input_scaling[1]
-        if input_time_scaling is None:
             input_time_min_vals = np.min(input_time, axis=0)
             input_time_max_vals = np.max(input_time, axis=0)
         else:
-            input_time_min_vals = input_time_scaling[0]
-            input_time_max_vals = input_time_scaling[1]
+            input_min_vals = self.lstm.input_scaling[0]
+            input_max_vals = self.lstm.input_scaling[1]
+            input_time_min_vals = self.lstm.input_time_scaling[0]
+            input_time_max_vals = self.lstm.input_time_scaling[1]
 
         # Apply normalization to put all variables in the range [0, 1]. This helps the model learn equally from them all.
         input_data = (input_data - input_min_vals) / (input_max_vals - input_min_vals)
@@ -865,7 +862,7 @@ class Forecaster():
     """
     
     """
-    def fit_lstm(self, model:LSTM, input_scaling, input_time_scaling, train_loader:t.utils.data.DataLoader, val_loader:t.utils.data.DataLoader=None, 
+    def fit_lstm(self, model:LSTM, input_scaling, input_time_scaling, train_loader:t.utils.data.DataLoader, dependent_variable:str, val_loader:t.utils.data.DataLoader=None, 
         lr:float=0.0005, dropout:float=0.1, patience:int=5, weight_decay:float=0, verbose:bool=False, loss_scalar:int=1000, max_epochs:int=100, 
         overwrite_class_model:bool=True, 
          **kwargs):
@@ -949,7 +946,6 @@ class Forecaster():
             print("Estimating confidence intervals...")   
         squared_errors = []
         with t.no_grad():
-            dependent_variable = input_scaling[0].index[0]
             for i, (inputs, time_inputs, targets) in enumerate(train_loader):
                 # put all batches on the correct device
                 inputs = inputs.to(device=device)
@@ -984,7 +980,7 @@ class Forecaster():
     """
     
     """
-    def format_fit_lstm(self, clean_data, sequence_length:int=10, batch_size:int=10, max_epochs:int=5, proportion_validation=0.1, lstm_device:str="cpu", overwrite_class_model:bool=True, verbose:bool=True, **kwargs):
+    def format_fit_lstm(self, clean_data, dependent_variable:str, sequence_length:int=10, batch_size:int=10, max_epochs:int=5, proportion_validation=0.1, lstm_device:str="cpu", overwrite_class_model:bool=True, verbose:bool=True, **kwargs):
         # format the data for lstm training
         train_loader, val_loader, input_scaling, input_time_scaling = self.format_lstm_data(clean_data, sequence_length, batch_size, proportion_validation, **kwargs)
 
@@ -992,7 +988,7 @@ class Forecaster():
         lstm = LSTM(input_size=train_loader.dataset[0][0].shape[-1]+train_loader.dataset[0][1].shape[-1], output_size=1, training_sequence_length=sequence_length, **kwargs).to(device=lstm_device)
 
         # fit the LSTM model
-        self.fit_lstm(lstm, train_loader=train_loader, input_scaling=input_scaling, input_time_scaling=input_time_scaling, val_loader=val_loader, max_epochs=max_epochs,
+        self.fit_lstm(lstm, input_scaling=input_scaling, input_time_scaling=input_time_scaling, train_loader=train_loader, dependent_variable=dependent_variable, val_loader=val_loader, max_epochs=max_epochs,
             device=lstm_device, overwrite_class_model=overwrite_class_model, verbose=verbose, **kwargs)
 
         return lstm
