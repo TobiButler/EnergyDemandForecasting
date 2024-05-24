@@ -865,9 +865,10 @@ class Forecaster():
     """
     
     """
-    def fit_lstm(self, model:LSTM, train_loader:t.utils.data.DataLoader, val_loader:t.utils.data.DataLoader=None, lr:float=0.0005, dropout:float=0.1, 
-        patience:int=5, weight_decay:float=0, verbose:bool=False, loss_scalar:int=1000, max_epochs:int=100, overwrite_class_model:bool=True, 
-        input_scaling=None, input_time_scaling=None, **kwargs):
+    def fit_lstm(self, model:LSTM, input_scaling, input_time_scaling, train_loader:t.utils.data.DataLoader, val_loader:t.utils.data.DataLoader=None, 
+        lr:float=0.0005, dropout:float=0.1, patience:int=5, weight_decay:float=0, verbose:bool=False, loss_scalar:int=1000, max_epochs:int=100, 
+        overwrite_class_model:bool=True, 
+         **kwargs):
         # copy model to avoid overwriting
         model = deepcopy(model)
 
@@ -948,16 +949,17 @@ class Forecaster():
             print("Estimating confidence intervals...")   
         squared_errors = []
         with t.no_grad():
+            dependent_variable = input_scaling[0].index[0]
             for i, (inputs, time_inputs, targets) in enumerate(train_loader):
                 # put all batches on the correct device
                 inputs = inputs.to(device=device)
                 time_inputs = time_inputs.to(device=device)
                 targets = (targets.to(device=device) * 
-                    (self.lstm.input_scaling[1][self.dependent_variable]-self.lstm.input_scaling[0][self.dependent_variable]) + self.lstm.input_scaling[0][self.dependent_variable])
+                    (input_scaling[1][dependent_variable]-input_scaling[0][dependent_variable]) + input_scaling[0][dependent_variable])
 
                 # evaluate model
                 outputs = (model(inputs, time_inputs, bayesian_predict=False)[:,0] * 
-                    (self.lstm.input_scaling[1][self.dependent_variable]-self.lstm.input_scaling[0][self.dependent_variable]) + self.lstm.input_scaling[0][self.dependent_variable])
+                    (input_scaling[1][dependent_variable]-input_scaling[0][dependent_variable]) + input_scaling[0][dependent_variable])
                 squared_errors.append(((outputs-targets)**2).cpu().numpy())
             model.variance = np.mean(np.concatenate(squared_errors))
 
@@ -974,7 +976,7 @@ class Forecaster():
         # save model to Forecaster class
         if overwrite_class_model:
             self.lstm = model
-            self.dependent_variable = input_scaling[0].index[0]
+            self.dependent_variable = dependent_variable
             self.predictor_variables = input_scaling[0].index[1:]
 
         return model
@@ -990,7 +992,7 @@ class Forecaster():
         lstm = LSTM(input_size=train_loader.dataset[0][0].shape[-1]+train_loader.dataset[0][1].shape[-1], output_size=1, training_sequence_length=sequence_length, **kwargs).to(device=lstm_device)
 
         # fit the LSTM model
-        self.fit_lstm(lstm, train_loader=train_loader, val_loader=val_loader, input_scaling=input_scaling, input_time_scaling=input_time_scaling, max_epochs=max_epochs,
+        self.fit_lstm(lstm, train_loader=train_loader, input_scaling=input_scaling, input_time_scaling=input_time_scaling, val_loader=val_loader, max_epochs=max_epochs,
             device=lstm_device, overwrite_class_model=overwrite_class_model, verbose=verbose, **kwargs)
 
         return lstm
